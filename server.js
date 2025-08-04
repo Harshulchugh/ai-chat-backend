@@ -100,6 +100,9 @@ app.post('/api/chat/message', async (req, res) => {
             return res.status(400).json({ error: 'Message or files required' });
         }
 
+        // Check for active runs and cancel them
+        await cancelActiveRuns(thread_id);
+
         let content = [{ type: "text", text: message }];
         
         file_ids.forEach(fileId => {
@@ -540,6 +543,26 @@ app.get('/', (req, res) => {
     
     res.send(html);
 });
+
+// Helper function to cancel active runs
+async function cancelActiveRuns(threadId) {
+    try {
+        const runs = await openai.beta.threads.runs.list(threadId);
+        
+        for (const run of runs.data) {
+            if (['queued', 'in_progress', 'requires_action'].includes(run.status)) {
+                console.log(`Cancelling active run: ${run.id}`);
+                await openai.beta.threads.runs.cancel(threadId, run.id);
+            }
+        }
+        
+        // Wait a moment for cancellation to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+        console.error('Error cancelling runs:', error);
+        // Continue anyway - the new message might still work
+    }
+}
 
 // Helper function to wait for assistant response
 async function waitForCompletion(threadId, runId, maxAttempts = 30) {
