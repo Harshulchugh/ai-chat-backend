@@ -8,7 +8,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
 const Sentiment = require('sentiment');
-const natural = require('natural');
+const { WordTokenizer } = require('natural');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -451,7 +451,8 @@ async function gatherWebIntelligence(query) {
         };
 
         // Simple keyword extraction instead of natural library
-        const keywords = query.toLowerCase()
+       const tokenizer = new WordTokenizer();
+const tokens = tokenizer.tokenize(query.toLowerCase());
             .split(' ')
             .filter(word => word.length > 3)
             .filter(word => !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'].includes(word));
