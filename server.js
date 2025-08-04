@@ -450,12 +450,14 @@ async function gatherWebIntelligence(query) {
             sources: []
         };
 
-        // Extract entities/topics from query
-        const tokens = natural.WordTokenizer.tokenize(query.toLowerCase());
-        const brands = tokens.filter(token => token.length > 3); // Simple brand detection
+        // Simple keyword extraction instead of natural library
+        const keywords = query.toLowerCase()
+            .split(' ')
+            .filter(word => word.length > 3)
+            .filter(word => !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'].includes(word));
         
-        if (brands.length > 0) {
-            const mainTopic = brands[0];
+        if (keywords.length > 0) {
+            const mainTopic = keywords[0];
             
             // Parallel data gathering
             const [redditData, socialData] = await Promise.all([
