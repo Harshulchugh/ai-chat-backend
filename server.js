@@ -24,16 +24,15 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 // Middleware
 app.use(cors({
-    origin: '*', // Allow all origins for Typedream
+    origin: '*',
     credentials: true
 }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // File upload configuration
 const upload = multer({
     dest: 'uploads/',
-    limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+    limits: { fileSize: 20 * 1024 * 1024 },
     fileFilter: (req, file, cb) => cb(null, true)
 });
 
@@ -65,13 +64,11 @@ app.post('/api/chat/upload', upload.single('file'), async (req, res) => {
             return res.status(400).json({ error: 'No file provided' });
         }
 
-        // Upload to OpenAI
         const file = await openai.files.create({
             file: fs.createReadStream(req.file.path),
             purpose: 'assistants'
         });
 
-        // Clean up temp file
         fs.unlinkSync(req.file.path);
 
         res.json({
@@ -103,26 +100,21 @@ app.post('/api/chat/message', async (req, res) => {
             return res.status(400).json({ error: 'Message or files required' });
         }
 
-        // Create message content
         let content = [{ type: "text", text: message }];
         
-        // Add file attachments
         file_ids.forEach(fileId => {
             content.push({ type: "file", file_id: fileId });
         });
 
-        // Add message to thread
         await openai.beta.threads.messages.create(thread_id, {
             role: "user",
             content: content
         });
 
-        // Run assistant
         const run = await openai.beta.threads.runs.create(thread_id, {
             assistant_id: ASSISTANT_ID
         });
 
-        // Wait for completion
         const result = await waitForCompletion(thread_id, run.id);
 
         if (result.error) {
@@ -152,8 +144,7 @@ app.get('/api/health', (req, res) => {
 
 // Serve chat widget HTML
 app.get('/', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -161,7 +152,6 @@ app.get('/', (req, res) => {
     <title>AI Assistant Chat</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
         .ai-chat-widget {
             width: 100%; max-width: 500px; height: 600px; margin: 0 auto;
             border: none; border-radius: 16px; display: flex; flex-direction: column;
@@ -169,147 +159,107 @@ app.get('/', (req, res) => {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             overflow: hidden; position: relative;
         }
-        
         .chat-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; padding: 20px; text-align: center; font-weight: 600; font-size: 16px;
             display: flex; align-items: center; justify-content: center; gap: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
-        
         .status-dot {
             width: 8px; height: 8px; border-radius: 50%; background: #4CAF50;
             animation: pulse 2s infinite;
         }
-        
         @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
-        
         .chat-messages {
             flex: 1; overflow-y: auto; padding: 20px;
             background: linear-gradient(to bottom, #f8f9fa 0%, #e9ecef 100%);
             scrollbar-width: thin; scrollbar-color: #cbd5e0 transparent;
         }
-        
         .chat-messages::-webkit-scrollbar { width: 6px; }
         .chat-messages::-webkit-scrollbar-track { background: transparent; }
         .chat-messages::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px; }
-        
         .message {
             margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px;
             animation: messageSlide 0.3s ease-out;
         }
-        
         @keyframes messageSlide { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
         .message.user { flex-direction: row-reverse; }
-        
         .message-content {
             max-width: 75%; padding: 12px 16px; border-radius: 20px;
             word-wrap: break-word; line-height: 1.4; position: relative;
         }
-        
         .message.user .message-content {
             background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
             color: white; border-bottom-right-radius: 6px;
             box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
         }
-        
         .message.assistant .message-content {
             background: white; color: #333; border: 1px solid #e1e5e9;
             border-bottom-left-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-        
         .message-avatar {
             width: 36px; height: 36px; border-radius: 50%; display: flex;
             align-items: center; justify-content: center; font-size: 12px;
             font-weight: bold; color: white; flex-shrink: 0;
         }
-        
         .message.user .message-avatar { background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); }
         .message.assistant .message-avatar { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
-        
         .chat-input-container { padding: 20px; background: white; border-top: 1px solid #e1e5e9; }
-        
         .file-preview {
             background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 12px;
             padding: 10px 12px; margin-bottom: 12px; display: flex;
             align-items: center; gap: 10px; font-size: 13px; color: #1976d2;
         }
-        
         .file-preview .remove-file {
             margin-left: auto; cursor: pointer; color: #666; font-weight: bold;
             padding: 4px; border-radius: 50%; transition: all 0.2s;
         }
-        
         .file-preview .remove-file:hover { background: #ffebee; color: #f44336; }
-        
         .input-wrapper {
             display: flex; gap: 10px; align-items: flex-end; background: #f8f9fa;
             border-radius: 25px; padding: 4px; border: 2px solid #e9ecef;
             transition: border-color 0.2s;
         }
-        
         .input-wrapper:focus-within { border-color: #007bff; }
-        
         .chat-input {
             flex: 1; min-height: 40px; max-height: 120px; padding: 10px 16px;
             border: none; background: transparent; resize: none; font-family: inherit;
             font-size: 14px; line-height: 1.4; outline: none;
         }
-        
         .input-controls { display: flex; gap: 6px; padding: 4px; }
-        
         .control-btn {
             width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
             transition: all 0.2s; font-size: 16px;
         }
-        
         .file-btn { background: #6c757d; color: white; }
         .file-btn:hover { background: #5a6268; transform: scale(1.05); }
-        
         .send-btn { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; }
         .send-btn:hover:not(:disabled) { background: linear-gradient(135deg, #218838 0%, #1abc9c 100%); transform: scale(1.05); }
         .send-btn:disabled { background: #adb5bd; cursor: not-allowed; transform: none; }
-        
         .file-input { display: none; }
-        
         .typing-indicator {
             display: none; align-items: center; gap: 12px; padding: 16px 20px;
             color: #6c757d; font-style: italic; animation: fadeIn 0.3s ease-out;
         }
-        
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
         .typing-dots { display: flex; gap: 4px; }
-        
         .typing-dot {
             width: 8px; height: 8px; background: #6c757d; border-radius: 50%;
             animation: typing 1.4s infinite ease-in-out;
         }
-        
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        
         @keyframes typing {
             0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
             40% { transform: scale(1); opacity: 1; }
         }
-        
-        .error-message {
-            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-            color: #721c24; border: 1px solid #f5c6cb; border-radius: 12px;
-            padding: 12px; margin: 12px 0; font-size: 13px;
-        }
-        
         .file-attachment {
             background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 8px; padding: 8px 12px; margin-top: 8px; font-size: 12px;
             display: flex; align-items: center; gap: 8px;
         }
-        
         .message.assistant .file-attachment { background: #f1f3f4; border: 1px solid #dadce0; color: #5f6368; }
-        
         @media (max-width: 480px) {
             .ai-chat-widget { height: 500px; border-radius: 8px; }
             .message-content { max-width: 85%; }
@@ -352,29 +302,41 @@ app.get('/', (req, res) => {
                 <div class="input-controls">
                     <label for="fileInput" class="control-btn file-btn" title="Upload file">📎</label>
                     <input type="file" id="fileInput" class="file-input" multiple />
-                    <button id="sendButton" class="control-btn send-btn" onclick="sendMessage()" title="Send message">➤</button>
+                    <button id="sendButton" class="control-btn send-btn" title="Send message">➤</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const CONFIG = { API_BASE_URL: window.location.origin + '/api', MAX_FILE_SIZE: 20 * 1024 * 1024 };
-        let threadId = null, currentFiles = [], isProcessing = false;
+        const CONFIG = { 
+            API_BASE_URL: window.location.origin + '/api', 
+            MAX_FILE_SIZE: 20 * 1024 * 1024 
+        };
+        
+        let threadId = null;
+        let currentFiles = [];
+        let isProcessing = false;
 
-        document.addEventListener('DOMContentLoaded', initializeChat);
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeChat();
+        });
 
         async function initializeChat() {
             try {
                 const response = await fetch(CONFIG.API_BASE_URL + '/chat/thread', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }
                 });
+                
                 if (response.ok) {
                     const data = await response.json();
                     threadId = data.thread_id;
                     updateStatusIndicator(true);
                     setupEventListeners();
-                } else throw new Error('Server error: ' + response.status);
+                } else {
+                    throw new Error('Server error: ' + response.status);
+                }
             } catch (error) {
                 console.error('Initialization failed:', error);
                 updateStatusIndicator(false);
@@ -385,6 +347,7 @@ app.get('/', (req, res) => {
         function setupEventListeners() {
             const chatInput = document.getElementById('chatInput');
             const fileInput = document.getElementById('fileInput');
+            const sendButton = document.getElementById('sendButton');
             
             chatInput.addEventListener('input', function() {
                 this.style.height = 'auto';
@@ -393,31 +356,48 @@ app.get('/', (req, res) => {
 
             chatInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && !e.shiftKey && !isProcessing) {
-                    e.preventDefault(); sendMessage();
+                    e.preventDefault(); 
+                    sendMessage();
                 }
             });
 
             fileInput.addEventListener('change', function(e) {
-                Array.from(e.target.files).forEach(file => {
-                    if (file.size <= CONFIG.MAX_FILE_SIZE) addFileToQueue(file);
-                    else showError('File "' + file.name + '" is too large. Maximum size is 20MB.');
+                Array.from(e.target.files).forEach(function(file) {
+                    if (file.size <= CONFIG.MAX_FILE_SIZE) {
+                        addFileToQueue(file);
+                    } else {
+                        showError('File "' + file.name + '" is too large. Maximum size is 20MB.');
+                    }
                 });
                 e.target.value = '';
             });
+            
+            sendButton.addEventListener('click', sendMessage);
         }
 
         function addFileToQueue(file) {
             currentFiles.push(file);
             const preview = document.createElement('div');
             preview.className = 'file-preview';
-            preview.innerHTML = '<div>📄</div><span>' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</span><span class="remove-file" onclick="removeFile(\'' + file.name.replace(/'/g, "\\\\'") + '\')">✕</span>';
+            preview.innerHTML = '<div>📄</div><span>' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</span><span class="remove-file" data-filename="' + file.name + '">✕</span>';
+            
+            preview.querySelector('.remove-file').addEventListener('click', function() {
+                removeFile(this.getAttribute('data-filename'));
+            });
+            
             document.getElementById('filePreview').appendChild(preview);
         }
 
         function removeFile(fileName) {
-            currentFiles = currentFiles.filter(file => file.name !== fileName);
-            document.querySelectorAll('.file-preview').forEach(preview => {
-                if (preview.textContent.includes(fileName)) preview.remove();
+            currentFiles = currentFiles.filter(function(file) {
+                return file.name !== fileName;
+            });
+            
+            const previews = document.querySelectorAll('.file-preview');
+            previews.forEach(function(preview) {
+                if (preview.textContent.includes(fileName)) {
+                    preview.remove();
+                }
             });
         }
 
@@ -428,24 +408,30 @@ app.get('/', (req, res) => {
 
         async function sendMessage() {
             if (isProcessing || !threadId) return;
+            
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
+            
             if (!message && currentFiles.length === 0) return;
 
             isProcessing = true;
             document.getElementById('sendButton').disabled = true;
 
-            if (message || currentFiles.length > 0) addMessage('user', message, [...currentFiles]);
+            if (message || currentFiles.length > 0) {
+                addMessage('user', message, currentFiles.slice());
+            }
 
             input.value = '';
             input.style.height = 'auto';
-            const filesToSend = [...currentFiles];
+            const filesToSend = currentFiles.slice();
             clearFiles();
             showTypingIndicator();
 
             try {
                 let fileIds = [];
-                if (filesToSend.length > 0) fileIds = await uploadFiles(filesToSend);
+                if (filesToSend.length > 0) {
+                    fileIds = await uploadFiles(filesToSend);
+                }
 
                 const response = await fetch(CONFIG.API_BASE_URL + '/chat/message', {
                     method: 'POST',
@@ -457,12 +443,19 @@ app.get('/', (req, res) => {
                     })
                 });
 
-                if (!response.ok) throw new Error('Failed to send message: ' + response.status);
+                if (!response.ok) {
+                    throw new Error('Failed to send message: ' + response.status);
+                }
+                
                 const data = await response.json();
-                if (data.error) throw new Error(data.error);
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
 
                 hideTypingIndicator();
                 addMessage('assistant', data.response);
+                
             } catch (error) {
                 console.error('Send failed:', error);
                 hideTypingIndicator();
@@ -475,11 +468,18 @@ app.get('/', (req, res) => {
 
         async function uploadFiles(files) {
             const fileIds = [];
-            for (const file of files) {
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
                 try {
                     const formData = new FormData();
                     formData.append('file', file);
-                    const response = await fetch(CONFIG.API_BASE_URL + '/chat/upload', { method: 'POST', body: formData });
+                    
+                    const response = await fetch(CONFIG.API_BASE_URL + '/chat/upload', { 
+                        method: 'POST', 
+                        body: formData 
+                    });
+                    
                     if (response.ok) {
                         const data = await response.json();
                         fileIds.push(data.file_id);
@@ -488,17 +488,21 @@ app.get('/', (req, res) => {
                     console.error('Upload error for ' + file.name + ':', error);
                 }
             }
+            
             return fileIds;
         }
 
-        function addMessage(sender, content, files = []) {
+        function addMessage(sender, content, files) {
+            files = files || [];
             const container = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + sender;
             
             let fileAttachments = '';
             if (files.length > 0) {
-                fileAttachments = files.map(file => '<div class="file-attachment"><div>📄</div><span>' + file.name + '</span></div>').join('');
+                fileAttachments = files.map(function(file) {
+                    return '<div class="file-attachment"><div>📄</div><span>' + file.name + '</span></div>';
+                }).join('');
             }
             
             messageDiv.innerHTML = '<div class="message-avatar">' + (sender === 'user' ? 'You' : 'AI') + '</div><div class="message-content">' + (content ? content.replace(/\\n/g, '<br>') : '') + fileAttachments + '</div>';
@@ -506,18 +510,35 @@ app.get('/', (req, res) => {
             container.scrollTop = container.scrollHeight;
         }
 
-        function showError(message) { addMessage('assistant', '❌ ' + message); }
-        function showTypingIndicator() { document.getElementById('typingIndicator').style.display = 'flex'; document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight; }
-        function hideTypingIndicator() { document.getElementById('typingIndicator').style.display = 'none'; }
+        function showError(message) { 
+            addMessage('assistant', '❌ ' + message); 
+        }
+        
+        function showTypingIndicator() { 
+            document.getElementById('typingIndicator').style.display = 'flex'; 
+            const container = document.getElementById('chatMessages');
+            container.scrollTop = container.scrollHeight; 
+        }
+        
+        function hideTypingIndicator() { 
+            document.getElementById('typingIndicator').style.display = 'none'; 
+        }
+        
         function updateStatusIndicator(connected) {
             const dot = document.querySelector('.status-dot');
-            if (connected) { dot.style.background = '#4CAF50'; dot.style.animation = 'pulse 2s infinite'; }
-            else { dot.style.background = '#f44336'; dot.style.animation = 'none'; }
+            if (connected) { 
+                dot.style.background = '#4CAF50'; 
+                dot.style.animation = 'pulse 2s infinite'; 
+            } else { 
+                dot.style.background = '#f44336'; 
+                dot.style.animation = 'none'; 
+            }
         }
     </script>
 </body>
-</html>
-    `);
+</html>`;
+    
+    res.send(html);
 });
 
 // Helper function to wait for assistant response
@@ -532,7 +553,9 @@ async function waitForCompletion(threadId, runId, maxAttempts = 30) {
                     const content = messages.data[0].content;
                     let response = '';
                     content.forEach(item => {
-                        if (item.type === 'text') response += item.text.value;
+                        if (item.type === 'text') {
+                            response += item.text.value;
+                        }
                     });
                     return { message: response.trim() };
                 }
@@ -558,7 +581,9 @@ async function waitForCompletion(threadId, runId, maxAttempts = 30) {
 setInterval(() => {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     for (const [id, thread] of threads.entries()) {
-        if (thread.created < oneHourAgo) threads.delete(id);
+        if (thread.created < oneHourAgo) {
+            threads.delete(id);
+        }
     }
 }, 60 * 60 * 1000);
 
