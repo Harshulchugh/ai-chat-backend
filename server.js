@@ -1059,16 +1059,22 @@ app.post('/api/chat/message', async (req, res) => {
             content[0].text += intelligenceText;
         }
         
-        // Add file attachments
-        fileIds.forEach(fileId => {
-            content.push({ type: "file", file_id: fileId });
-        });
-
-        // Send to assistant
-        await openai.beta.threads.messages.create(thread_id, {
+        // Prepare message with proper file attachments
+        const messageData = {
             role: "user",
             content: content
-        });
+        };
+        
+        // Add file attachments using the correct OpenAI format
+        if (fileIds.length > 0) {
+            messageData.attachments = fileIds.map(fileId => ({
+                file_id: fileId,
+                tools: [{ type: "file_search" }]
+            }));
+        }
+
+        // Send to assistant
+        await openai.beta.threads.messages.create(thread_id, messageData);
 
         const run = await openai.beta.threads.runs.create(thread_id, {
             assistant_id: ASSISTANT_ID
