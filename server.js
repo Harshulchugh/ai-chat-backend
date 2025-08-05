@@ -147,6 +147,39 @@ function generateEnhancedIntelligence(query, industry) {
     return intelligence;
 }
 
+// Format intelligence data as a response when assistant times out
+function formatIntelligenceAsResponse(data) {
+    const sentiment = data.sentiment_analysis;
+    
+    return '## ' + data.query + ' - Market Intelligence Report\n\n' +
+           '### 📊 Sentiment Overview\n' +
+           '• **Positive Sentiment:** ' + sentiment.positive_percentage + '%\n' +
+           '• **Neutral Sentiment:** ' + sentiment.neutral_percentage + '%\n' +
+           '• **Negative Sentiment:** ' + sentiment.negative_percentage + '%\n' +
+           '• **Total Mentions:** ' + sentiment.total_mentions + '\n\n' +
+           
+           '### 🌐 Data Sources\n' +
+           data.sources.map(source => 
+               '**' + source.platform + ':**\n' +
+               '• Data Points: ' + (source.mentions || source.reviews || source.articles || 'N/A') + '\n' +
+               '• Sentiment: ' + (source.sentiment || 'N/A') + '\n' +
+               '• Key Themes: ' + source.key_themes.join(', ') + '\n' +
+               '• [View Source](' + source.url + ')\n'
+           ).join('\n') + '\n' +
+           
+           '### 👥 Customer Personas\n' +
+           '• **Primary Segment:** ' + data.persona_analysis.primary_segment + '\n' +
+           '• **Secondary Segment:** ' + data.persona_analysis.secondary_segment + '\n\n' +
+           
+           '### 💡 Key Insights\n' +
+           data.insights.map(insight => '• ' + insight).join('\n') + '\n\n' +
+           
+           '### 🚀 Strategic Recommendations\n' +
+           data.recommendations.map(rec => '• ' + rec).join('\n') + '\n\n' +
+           
+           '*Report ID: ' + data.report_id + ' | Industry: ' + data.industry + ' | Generated: ' + new Date(data.timestamp).toLocaleString() + '*';
+}
+
 app.get('/', (req, res) => {
     const htmlContent = `
 <!DOCTYPE html>
@@ -1009,13 +1042,21 @@ app.post('/api/chat/message', async (req, res) => {
             }
         }
         
+        // Create message for assistant (simplified to avoid timeout)
+        let assistantMessage = safeMessage;
+        
+        // For intelligence queries, send simplified request to assistant
+        if (intelligenceData) {
+            assistantMessage = 'Provide analysis for: ' + safeMessage + '\n\nContext: Market intelligence request for ' + industry + ' industry analysis.';
+        }
+        
         const messageData = {
             role: "user",
-            content: safeMessage + (intelligenceData ? '\n\n[ENHANCED MARKET INTELLIGENCE DATA]\n' + JSON.stringify(intelligenceData, null, 2) : '')
+            content: assistantMessage
         };
         
         if (fileIds.length > 0) {
-            messageData.content += '\n\n[FILE ANALYSIS REQUEST]\nFiles uploaded for analysis: ' + fileIds.length + ' file(s)\nFile IDs: ' + fileIds.join(', ');
+            messageData.content += '\n\nFiles uploaded for analysis: ' + fileIds.length + ' file(s)';
         }
 
         await openai.beta.threads.messages.create(thread_id, messageData);
@@ -1024,10 +1065,27 @@ app.post('/api/chat/message', async (req, res) => {
             assistant_id: ASSISTANT_ID
         });
 
-        const result = await waitForCompletion(thread_id, run.id);
+        // For intelligence queries, use faster processing
+        const maxAttempts = intelligenceData ? 30 : 60; // Shorter timeout for intelligence
+        const result = await waitForCompletion(thread_id, run.id, maxAttempts);
 
         if (result.error) {
             console.error('Assistant run error:', result.error);
+            
+            // If assistant times out but we have intelligence data, use that instead
+            if (intelligenceData && result.error.includes('timeout')) {
+                console.log('⚡ Using intelligence data due to assistant timeout');
+                const intelligenceResponse = formatIntelligenceAsResponse(intelligenceData);
+                return res.json({
+                    response: intelligenceResponse,
+                    thread_id: thread_id,
+                    status: 'completed',
+                    intelligence_data: intelligenceData,
+                    report_id: intelligenceData.report_id,
+                    source: 'intelligence_fallback'
+                });
+            }
+            
             return res.status(500).json({ error: result.error });
         }
 
@@ -1213,8 +1271,8 @@ async function cancelActiveRuns(threadId) {
     }
 }
 
-async function waitForCompletion(threadId, runId, maxAttempts) {
-    const attempts = maxAttempts || 60;
+async function waitForCompletion(threadId, runId, maxAttempts = 60) {
+    const attempts = maxAttempts;
     
     for (let attempt = 0; attempt < attempts; attempt++) {
         try {
@@ -1244,7 +1302,7 @@ async function waitForCompletion(threadId, runId, maxAttempts) {
         }
     }
     
-    return { error: 'Assistant response timeout' };
+    return { error: 'Assistant response timeout after ' + attempts + ' seconds' };
 }
 
 app.get('/api/health', (req, res) => {
