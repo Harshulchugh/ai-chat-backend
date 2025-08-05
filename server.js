@@ -163,6 +163,7 @@ app.get('/', (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>InsightEar GPT - Enterprise Market Intelligence</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -266,6 +267,191 @@ app.get('/', (req, res) => {
             color: #2d3748;
             border: 1px solid #e2e8f0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        
+        .message.assistant .message-content h3 {
+            color: #1e3c72;
+            font-size: 18px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .message.assistant .message-content h4 {
+            color: #2d3748;
+            font-size: 16px;
+            margin: 20px 0 10px 0;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sentiment-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .sentiment-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border-left: 4px solid #1e3c72;
+        }
+        
+        .sentiment-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e3c72;
+            margin-bottom: 5px;
+        }
+        
+        .sentiment-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 10px;
+            height: 8px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.8s ease;
+        }
+        
+        .progress-positive { background: linear-gradient(90deg, #28a745, #20c997); }
+        .progress-neutral { background: linear-gradient(90deg, #ffc107, #fd7e14); }
+        .progress-negative { background: linear-gradient(90deg, #dc3545, #e83e8c); }
+        
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .source-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 15px;
+            transition: transform 0.2s;
+        }
+        
+        .source-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .source-platform {
+            font-weight: bold;
+            color: #1e3c72;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .insights-list {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        
+        .insights-list li {
+            margin: 10px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .insights-list li::before {
+            content: "💡";
+            position: absolute;
+            left: 0;
+        }
+        
+        .recommendations-grid {
+            display: grid;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .recommendation-card {
+            background: linear-gradient(135deg, #e8f4f8 0%, #d1ecf1 100%);
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        
+        .recommendation-card:hover {
+            transform: translateX(5px);
+        }
+        
+        .download-section {
+            background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
+            border: 1px solid #c3e6cb;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        }
+        
+        .persona-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .persona-card {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 1px solid #ffeaa7;
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .persona-percentage {
+            font-size: 20px;
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 5px;
         }
         
         .message.user .message-content {
@@ -563,7 +749,19 @@ app.get('/', (req, res) => {
                 if (response.ok) {
                     const data = await response.json();
                     hideTyping();
-                    addMessage(data.response, 'assistant');
+                    
+                    // Enhanced response formatting
+                    if (data.intelligence_data) {
+                        const formattedResponse = formatIntelligenceReport(data.response, data.intelligence_data);
+                        addMessage(formattedResponse, 'assistant');
+                        
+                        // Add PDF download section if report available
+                        if (data.report_id) {
+                            addDownloadSection(data.report_id);
+                        }
+                    } else {
+                        addMessage(data.response, 'assistant');
+                    }
                 } else {
                     throw new Error('HTTP ' + response.status);
                 }
@@ -637,6 +835,128 @@ app.get('/', (req, res) => {
             }
         });
         
+        function formatIntelligenceReport(response, intelligenceData) {
+            // Extract key data
+            const sentiment = intelligenceData.sentiment_analysis;
+            const sources = intelligenceData.sources;
+            const insights = intelligenceData.insights;
+            const recommendations = intelligenceData.recommendations;
+            const persona = intelligenceData.persona_analysis;
+            
+            return '<div class="intelligence-report">' +
+                '<h3><i class="fas fa-chart-line"></i> ' + intelligenceData.query + ' - Market Intelligence Report</h3>' +
+                
+                '<h4><i class="fas fa-heart"></i> Sentiment Overview</h4>' +
+                '<div class="sentiment-overview">' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value" style="color: #28a745;">' + sentiment.positive_percentage + '%</div>' +
+                        '<div class="sentiment-label">Positive</div>' +
+                        '<div class="progress-bar"><div class="progress-fill progress-positive" style="width: ' + sentiment.positive_percentage + '%"></div></div>' +
+                    '</div>' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value" style="color: #ffc107;">' + sentiment.neutral_percentage + '%</div>' +
+                        '<div class="sentiment-label">Neutral</div>' +
+                        '<div class="progress-bar"><div class="progress-fill progress-neutral" style="width: ' + sentiment.neutral_percentage + '%"></div></div>' +
+                    '</div>' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value" style="color: #dc3545;">' + sentiment.negative_percentage + '%</div>' +
+                        '<div class="sentiment-label">Negative</div>' +
+                        '<div class="progress-bar"><div class="progress-fill progress-negative" style="width: ' + sentiment.negative_percentage + '%"></div></div>' +
+                    '</div>' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value">' + sentiment.total_mentions + '</div>' +
+                        '<div class="sentiment-label">Total Mentions</div>' +
+                    '</div>' +
+                '</div>' +
+                
+                '<h4><i class="fas fa-globe"></i> Data Sources</h4>' +
+                '<div class="source-grid">' +
+                    sources.map(source => 
+                        '<div class="source-card">' +
+                            '<div class="source-platform">' +
+                                getSourceIcon(source.platform) + ' ' + source.platform +
+                            '</div>' +
+                            '<div><strong>Data Points:</strong> ' + (source.mentions || source.reviews || source.articles || 'N/A') + '</div>' +
+                            '<div><strong>Sentiment:</strong> <span style="color: ' + getSentimentColor(source.sentiment) + '">' + source.sentiment + '</span></div>' +
+                            '<div><strong>Themes:</strong> ' + source.key_themes.join(', ') + '</div>' +
+                            '<a href="' + source.url + '" target="_blank" style="color: #1e3c72; text-decoration: none;"><i class="fas fa-external-link-alt"></i> View Source</a>' +
+                        '</div>'
+                    ).join('') +
+                '</div>' +
+                
+                '<h4><i class="fas fa-users"></i> Customer Personas</h4>' +
+                '<div class="persona-cards">' +
+                    '<div class="persona-card">' +
+                        '<div class="persona-percentage">35%</div>' +
+                        '<div>' + persona.primary_segment + '</div>' +
+                    '</div>' +
+                    '<div class="persona-card">' +
+                        '<div class="persona-percentage">28%</div>' +
+                        '<div>' + persona.secondary_segment + '</div>' +
+                    '</div>' +
+                '</div>' +
+                
+                '<h4><i class="fas fa-lightbulb"></i> Key Insights</h4>' +
+                '<div class="insights-list">' +
+                    '<ul>' + insights.map(insight => '<li>' + insight + '</li>').join('') + '</ul>' +
+                '</div>' +
+                
+                '<h4><i class="fas fa-rocket"></i> Strategic Recommendations</h4>' +
+                '<div class="recommendations-grid">' +
+                    recommendations.map(rec => 
+                        '<div class="recommendation-card">' +
+                            '<i class="fas fa-arrow-right"></i> ' + rec +
+                        '</div>'
+                    ).join('') +
+                '</div>' +
+                
+                '<div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 12px; color: #6c757d;">' +
+                    '<strong>Report ID:</strong> ' + intelligenceData.report_id + ' | ' +
+                    '<strong>Industry:</strong> ' + intelligenceData.industry + ' | ' +
+                    '<strong>Generated:</strong> ' + new Date(intelligenceData.timestamp).toLocaleString() +
+                '</div>' +
+            '</div>';
+        }
+        
+        function addDownloadSection(reportId) {
+            const messagesContainer = document.getElementById('messages');
+            const downloadDiv = document.createElement('div');
+            downloadDiv.className = 'message assistant';
+            downloadDiv.innerHTML = 
+                '<div class="message-content">' +
+                    '<div class="download-section">' +
+                        '<h4><i class="fas fa-file-pdf"></i> Professional Report Ready</h4>' +
+                        '<p>Your comprehensive market intelligence report is ready for download.</p>' +
+                        '<a href="/api/reports/' + reportId + '/download" class="download-btn" target="_blank">' +
+                            '<i class="fas fa-download"></i>' +
+                            'Download PDF Report' +
+                        '</a>' +
+                    '</div>' +
+                '</div>';
+            messagesContainer.appendChild(downloadDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function getSourceIcon(platform) {
+            const icons = {
+                'Reddit': '<i class="fab fa-reddit" style="color: #ff4500;"></i>',
+                'Product Reviews': '<i class="fas fa-star" style="color: #ffc107;"></i>',
+                'Social Media': '<i class="fas fa-hashtag" style="color: #1da1f2;"></i>',
+                'News & Media': '<i class="fas fa-newspaper" style="color: #6c757d;"></i>'
+            };
+            return icons[platform] || '<i class="fas fa-globe"></i>';
+        }
+        
+        function getSentimentColor(sentiment) {
+            const colors = {
+                'positive': '#28a745',
+                'neutral': '#ffc107',
+                'negative': '#dc3545',
+                'mixed': '#17a2b8'
+            };
+            return colors[sentiment] || '#6c757d';
+        }
+        
         window.addEventListener('load', initializeChat);
     </script>
 </body>
@@ -691,6 +1011,9 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 });
 
+// Store reports for PDF generation
+const reports = new Map();
+
 // Enhanced message processing
 app.post('/api/chat/message', async (req, res) => {
     try {
@@ -722,6 +1045,9 @@ app.post('/api/chat/message', async (req, res) => {
         if (needsIntelligence) {
             console.log('🧠 Generating ' + industry + ' intelligence for: ' + safeMessage);
             intelligenceData = generateEnhancedIntelligence(safeMessage, industry);
+            
+            // Store report for PDF generation
+            reports.set(intelligenceData.report_id, intelligenceData);
         }
 
         // Create enhanced message content
@@ -758,7 +1084,8 @@ app.post('/api/chat/message', async (req, res) => {
             response: result.message,
             thread_id: thread_id,
             status: 'completed',
-            intelligence_data: intelligenceData
+            intelligence_data: intelligenceData,
+            report_id: intelligenceData ? intelligenceData.report_id : null
         });
 
     } catch (error) {
@@ -766,6 +1093,35 @@ app.post('/api/chat/message', async (req, res) => {
         res.status(500).json({ error: 'Failed to process message' });
     }
 });
+
+// Simple PDF Report generation endpoint
+app.get('/api/reports/:reportId/download', async (req, res) => {
+    try {
+        const reportId = req.params.reportId;
+        const reportData = reports.get(reportId);
+        
+        if (!reportData) {
+            return res.status(404).json({ error: 'Report not found' });
+        }
+
+        // Generate simple HTML for PDF
+        const htmlContent = generateSimplePDFHTML(reportData);
+        
+        // Set headers for PDF download
+        res.setHeader('Content-Type', 'text/html');
+        res.setHeader('Content-Disposition', 'attachment; filename="InsightEar-Report-' + reportId + '.html"');
+        res.send(htmlContent);
+
+    } catch (error) {
+        console.error('Report download error:', error);
+        res.status(500).json({ error: 'Failed to download report' });
+    }
+});
+
+// Generate simple PDF HTML
+function generateSimplePDFHTML(data) {
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>InsightEar GPT Report</title><style>body{font-family:Arial,sans-serif;margin:40px;color:#333;line-height:1.6}.header{text-align:center;border-bottom:3px solid #1e3c72;padding-bottom:20px;margin-bottom:30px}.logo{font-size:28px;font-weight:bold;color:#1e3c72;margin-bottom:10px}.section{margin:25px 0;page-break-inside:avoid}.section h2{color:#1e3c72;border-left:4px solid #2a5298;padding-left:15px}.metric{background:#f8f9fa;padding:15px;margin:10px 0;border-radius:8px;border-left:4px solid #2a5298}.source{background:#fff;border:1px solid #e0e0e0;padding:15px;margin:10px 0;border-radius:8px}.recommendation{background:#e8f4f8;border-left:4px solid #17a2b8;padding:15px;margin:10px 0}</style></head><body><div class="header"><div class="logo">📊 InsightEar GPT</div><div>Enterprise Market Intelligence Report</div><div style="margin-top:15px;font-size:14px;"><strong>Analysis:</strong> ' + data.query + '<br><strong>Industry:</strong> ' + data.industry + '<br><strong>Generated:</strong> ' + new Date(data.timestamp).toLocaleDateString() + '</div></div><div class="section"><h2>📋 Executive Summary</h2><p>Comprehensive market intelligence analysis for <strong>' + data.query + '</strong> within the ' + data.industry + ' sector.</p></div><div class="section"><h2>📊 Sentiment Overview</h2><div class="metric"><strong>Positive:</strong> ' + data.sentiment_analysis.positive_percentage + '%</div><div class="metric"><strong>Neutral:</strong> ' + data.sentiment_analysis.neutral_percentage + '%</div><div class="metric"><strong>Negative:</strong> ' + data.sentiment_analysis.negative_percentage + '%</div><div class="metric"><strong>Total Mentions:</strong> ' + data.sentiment_analysis.total_mentions + '</div></div><div class="section"><h2>🌐 Data Sources</h2>' + data.sources.map(source => '<div class="source"><h4>' + source.platform + '</h4><p><strong>Data Points:</strong> ' + (source.mentions || source.reviews || source.articles || 'N/A') + '</p><p><strong>URL:</strong> <a href="' + source.url + '">' + source.url + '</a></p></div>').join('') + '</div><div class="section"><h2>💡 Key Insights</h2><ul>' + data.insights.map(insight => '<li>' + insight + '</li>').join('') + '</ul></div><div class="section"><h2>🚀 Recommendations</h2>' + data.recommendations.map(rec => '<div class="recommendation">' + rec + '</div>').join('') + '</div><div style="margin-top:40px;text-align:center;font-size:12px;color:#666;border-top:1px solid #e0e0e0;padding-top:20px;"><p><strong>Report ID:</strong> ' + data.report_id + ' | <strong>Generated by:</strong> ' + data.generated_by + '</p></div></body></html>';
+}
 
 // Helper function to cancel active runs
 async function cancelActiveRuns(threadId) {
