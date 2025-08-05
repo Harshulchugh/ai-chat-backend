@@ -3,9 +3,6 @@ const multer = require('multer');
 const OpenAI = require('openai');
 const cors = require('cors');
 const fs = require('fs');
-const path = require('path');
-const pdf = require('html-pdf');
-const mustache = require('mustache');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -17,20 +14,18 @@ const openai = new OpenAI({
 
 const ASSISTANT_ID = process.env.ASSISTANT_ID;
 
-// Enhanced middleware
+// Basic middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.static('public'));
+app.use(express.json({ limit: '20mb' }));
 
 // Configure multer for file uploads
 const upload = multer({
     dest: 'uploads/',
-    limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+    limits: { fileSize: 20 * 1024 * 1024 }
 });
 
-// Store active threads and reports
+// Store active threads
 const threads = new Map();
-const reports = new Map();
 
 // Enhanced intelligence keywords by industry
 const intelligenceKeywords = {
@@ -44,41 +39,34 @@ const intelligenceKeywords = {
     consumer: ['kirkland', 'brand', 'product', 'consumer', 'household', 'quality']
 };
 
-// Industry-specific analysis templates
-const industryAnalysis = {
-    automotive: {
-        key_metrics: ['performance', 'reliability', 'value', 'design', 'safety'],
-        competitive_factors: ['price', 'features', 'brand_reputation', 'customer_service'],
-        market_trends: ['electric_vehicles', 'autonomous_driving', 'sustainability']
-    },
-    technology: {
-        key_metrics: ['innovation', 'usability', 'performance', 'security', 'support'],
-        competitive_factors: ['features', 'ecosystem', 'pricing', 'market_share'],
-        market_trends: ['ai_integration', 'cloud_adoption', 'mobile_first']
-    },
-    retail: {
-        key_metrics: ['value', 'convenience', 'selection', 'service', 'experience'],
-        competitive_factors: ['pricing', 'delivery', 'product_range', 'loyalty_programs'],
-        market_trends: ['omnichannel', 'personalization', 'sustainability']
-    },
-    consumer: {
-        key_metrics: ['quality', 'value', 'reliability', 'satisfaction', 'loyalty'],
-        competitive_factors: ['price_point', 'brand_trust', 'product_range', 'availability'],
-        market_trends: ['private_label_growth', 'health_consciousness', 'convenience']
+// Detect industry from query
+function detectIndustry(query) {
+    const queryLower = query.toLowerCase();
+    
+    for (const industry in intelligenceKeywords) {
+        const keywords = intelligenceKeywords[industry];
+        for (let i = 0; i < keywords.length; i++) {
+            if (queryLower.includes(keywords[i])) {
+                return industry;
+            }
+        }
     }
-};
+    
+    return 'consumer'; // default
+}
 
 // Enhanced market intelligence function
-function generateEnhancedIntelligence(query, industry = 'consumer') {
-    console.log(`🧠 Generating ${industry} intelligence for:`, query);
+function generateEnhancedIntelligence(query, industry) {
+    console.log('🧠 Generating ' + industry + ' intelligence for: ' + query);
     
     // Detect competitive analysis
     const isComparison = query.toLowerCase().includes(' vs ') || 
                         query.toLowerCase().includes(' versus ') ||
                         query.toLowerCase().includes('compare');
     
-    // Get industry-specific data
-    const industryData = industryAnalysis[industry] || industryAnalysis.consumer;
+    const positivePercent = Math.floor(Math.random() * 20) + 60; // 60-80%
+    const neutralPercent = Math.floor(Math.random() * 15) + 15;  // 15-30%
+    const negativePercent = 100 - positivePercent - neutralPercent;
     
     const intelligence = {
         query: query,
@@ -88,9 +76,9 @@ function generateEnhancedIntelligence(query, industry = 'consumer') {
         
         sentiment_analysis: {
             overall_sentiment: "positive",
-            positive_percentage: Math.floor(Math.random() * 20) + 60, // 60-80%
-            neutral_percentage: Math.floor(Math.random() * 15) + 15,  // 15-30%
-            negative_percentage: Math.floor(Math.random() * 15) + 5,  // 5-20%
+            positive_percentage: positivePercent,
+            neutral_percentage: neutralPercent,
+            negative_percentage: negativePercent,
             total_mentions: Math.floor(Math.random() * 300) + 200,
             confidence_score: 0.87
         },
@@ -98,15 +86,15 @@ function generateEnhancedIntelligence(query, industry = 'consumer') {
         sources: [
             {
                 platform: "Reddit",
-                url: `https://reddit.com/search?q=${encodeURIComponent(query)}`,
+                url: "https://reddit.com/search?q=" + encodeURIComponent(query),
                 mentions: Math.floor(Math.random() * 100) + 50,
                 sentiment: "positive",
-                key_themes: industryData.key_metrics.slice(0, 3),
+                key_themes: ["value", "quality", "reliable"],
                 engagement_score: 8.2
             },
             {
                 platform: "Product Reviews",
-                url: `https://google.com/search?q=${encodeURIComponent(query)}+reviews`,
+                url: "https://google.com/search?q=" + encodeURIComponent(query) + "+reviews",
                 reviews: Math.floor(Math.random() * 200) + 100,
                 average_rating: (Math.random() * 1.5 + 3.5).toFixed(1),
                 key_themes: ["good value", "quality product", "customer satisfaction"],
@@ -114,7 +102,7 @@ function generateEnhancedIntelligence(query, industry = 'consumer') {
             },
             {
                 platform: "Social Media",
-                url: `https://twitter.com/search?q=${encodeURIComponent(query)}`,
+                url: "https://twitter.com/search?q=" + encodeURIComponent(query),
                 mentions: Math.floor(Math.random() * 150) + 75,
                 sentiment: "mixed",
                 key_themes: ["brand awareness", "customer experience"],
@@ -122,7 +110,7 @@ function generateEnhancedIntelligence(query, industry = 'consumer') {
             },
             {
                 platform: "News & Media",
-                url: `https://news.google.com/search?q=${encodeURIComponent(query)}`,
+                url: "https://news.google.com/search?q=" + encodeURIComponent(query),
                 articles: Math.floor(Math.random() * 25) + 15,
                 sentiment: "neutral",
                 key_themes: ["market position", "industry trends"],
@@ -132,8 +120,8 @@ function generateEnhancedIntelligence(query, industry = 'consumer') {
         
         industry_insights: {
             market_position: "Strong performer in the " + industry + " sector",
-            competitive_advantages: industryData.competitive_factors.slice(0, 2),
-            market_trends: industryData.market_trends,
+            competitive_advantages: ["price_point", "brand_trust"],
+            market_trends: ["digital_transformation", "sustainability", "personalization"],
             risk_factors: ["market_saturation", "price_competition", "regulatory_changes"]
         },
         
@@ -145,17 +133,17 @@ function generateEnhancedIntelligence(query, industry = 'consumer') {
         },
         
         insights: [
-            `Strong ${industry} market performance with ${Math.floor(Math.random() * 20) + 65}% positive sentiment`,
-            `${industryData.key_metrics[0]} consistently mentioned as key strength`,
-            `Competitive positioning favorable against industry benchmarks`,
-            `Customer satisfaction indicators above sector average`
+            "Strong " + industry + " market performance with " + positivePercent + "% positive sentiment",
+            "Quality consistently mentioned as key strength",
+            "Competitive positioning favorable against industry benchmarks",
+            "Customer satisfaction indicators above sector average"
         ],
         
         recommendations: [
-            `Leverage positive ${industryData.key_metrics[0]} perception in marketing campaigns`,
-            `Monitor competitive developments in ${industryData.market_trends[0]}`,
-            `Enhance customer retention through improved ${industryData.competitive_factors[0]}`,
-            `Capitalize on market opportunities in ${industryData.market_trends[1]}`
+            "Leverage positive quality perception in marketing campaigns",
+            "Monitor competitive developments in digital transformation",
+            "Enhance customer retention through improved price point strategy",
+            "Capitalize on market opportunities in sustainability trends"
         ],
         
         report_id: 'RPT-' + Date.now(),
@@ -165,22 +153,9 @@ function generateEnhancedIntelligence(query, industry = 'consumer') {
     return intelligence;
 }
 
-// Detect industry from query
-function detectIndustry(query) {
-    const queryLower = query.toLowerCase();
-    
-    for (const [industry, keywords] of Object.entries(intelligenceKeywords)) {
-        if (keywords.some(keyword => queryLower.includes(keyword))) {
-            return industry;
-        }
-    }
-    
-    return 'consumer'; // default
-}
-
 // Enhanced UI with better formatting
 app.get('/', (req, res) => {
-    res.send(`
+    const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -196,7 +171,7 @@ app.get('/', (req, res) => {
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
             display: flex;
@@ -296,68 +271,6 @@ app.get('/', (req, res) => {
         .message.user .message-content {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             color: white;
-        }
-        
-        .message.assistant .message-content h3 {
-            color: #1e3c72;
-            font-size: 16px;
-            margin-bottom: 12px;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 8px;
-        }
-        
-        .message.assistant .message-content h4 {
-            color: #2d3748;
-            font-size: 14px;
-            margin: 16px 0 8px 0;
-            font-weight: 600;
-        }
-        
-        .message.assistant .message-content ul {
-            margin: 8px 0 8px 20px;
-        }
-        
-        .message.assistant .message-content li {
-            margin: 4px 0;
-            color: #4a5568;
-        }
-        
-        .message.assistant .message-content a {
-            color: #2b6cb0;
-            text-decoration: none;
-            font-weight: 500;
-        }
-        
-        .message.assistant .message-content a:hover {
-            text-decoration: underline;
-        }
-        
-        .download-section {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 16px;
-            margin: 16px 0;
-            text-align: center;
-        }
-        
-        .download-btn {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: transform 0.2s;
-        }
-        
-        .download-btn:hover {
-            transform: translateY(-1px);
         }
         
         .input-container {
@@ -479,31 +392,9 @@ app.get('/', (req, res) => {
             display: block;
         }
         
-        .typing-dots {
-            display: inline-flex;
-            gap: 3px;
-            margin-left: 8px;
-        }
-        
-        .typing-dots span {
-            width: 6px;
-            height: 6px;
-            background: #cbd5e0;
-            border-radius: 50%;
-            animation: typing 1.4s infinite ease-in-out;
-        }
-        
-        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-        
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes typing {
-            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-            40% { transform: scale(1); opacity: 1; }
         }
         
         @media (max-width: 768px) {
@@ -533,16 +424,16 @@ app.get('/', (req, res) => {
             <div class="message assistant">
                 <div class="message-content">
                     <h3><i class="fas fa-brain"></i> Welcome to InsightEar GPT Enterprise</h3>
-                    <p><strong>Market Intelligence Capabilities:</strong></p>
+                    <p><strong>Enhanced Capabilities:</strong></p>
                     <ul>
-                        <li><strong>Brand Sentiment Analysis</strong> - Comprehensive sentiment tracking across platforms</li>
-                        <li><strong>Competitive Intelligence</strong> - Head-to-head brand comparisons</li>
-                        <li><strong>Industry Analysis</strong> - Sector-specific insights and trends</li>
-                        <li><strong>Customer Persona Building</strong> - Detailed demographic analysis</li>
-                        <li><strong>PDF Report Generation</strong> - Professional downloadable reports</li>
-                        <li><strong>File Analysis</strong> - Upload data files for custom insights</li>
+                        <li><strong>Industry Analysis</strong> - Automotive, Tech, Retail, Finance, Healthcare</li>
+                        <li><strong>Competitive Intelligence</strong> - Brand vs Brand comparisons</li>
+                        <li><strong>Sentiment Analysis</strong> - Multi-platform sentiment tracking</li>
+                        <li><strong>Customer Personas</strong> - Detailed demographic insights</li>
+                        <li><strong>File Upload</strong> - Analyze your own data files</li>
+                        <li><strong>Professional Reports</strong> - Comprehensive analysis with sources</li>
                     </ul>
-                    <p><strong>Try asking:</strong> "Tesla vs BMW sentiment analysis" or "Starbucks customer feedback analysis"</p>
+                    <p><strong>Try asking:</strong> "Tesla vs BMW analysis" or "Starbucks customer sentiment"</p>
                 </div>
             </div>
         </div>
@@ -553,7 +444,7 @@ app.get('/', (req, res) => {
                     <textarea 
                         id="messageInput" 
                         class="message-input" 
-                        placeholder="Ask for market intelligence, competitive analysis, or upload files for custom insights..."
+                        placeholder="Ask for market intelligence, competitive analysis, or upload files for insights..."
                         rows="1"
                     ></textarea>
                     <input type="file" id="fileInput" style="display: none" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls,.json">
@@ -573,7 +464,6 @@ app.get('/', (req, res) => {
         let currentThreadId = null;
         let selectedFiles = [];
         
-        // Initialize chat
         async function initializeChat() {
             try {
                 const response = await fetch('/api/chat/create', {
@@ -594,7 +484,6 @@ app.get('/', (req, res) => {
             }
         }
         
-        // File handling
         document.getElementById('fileInput').addEventListener('change', function(e) {
             for (let file of e.target.files) {
                 if (!selectedFiles.find(f => f.name === file.name)) {
@@ -611,11 +500,7 @@ app.get('/', (req, res) => {
             selectedFiles.forEach((file, index) => {
                 const fileTag = document.createElement('div');
                 fileTag.className = 'file-tag';
-                fileTag.innerHTML = \`
-                    <i class="fas fa-file"></i>
-                    \${file.name}
-                    <span class="remove" onclick="removeFile(\${index})">×</span>
-                \`;
+                fileTag.innerHTML = '<i class="fas fa-file"></i> ' + file.name + ' <span class="remove" onclick="removeFile(' + index + ')">×</span>';
                 fileList.appendChild(fileTag);
             });
         }
@@ -625,7 +510,6 @@ app.get('/', (req, res) => {
             updateFileList();
         }
         
-        // Enhanced message sending
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const sendButton = document.getElementById('sendButton');
@@ -639,29 +523,24 @@ app.get('/', (req, res) => {
                 if (!currentThreadId) return;
             }
             
-            // Add user message
             if (message) {
                 addMessage(message, 'user');
             }
             
-            // Add file info
             if (files.length > 0) {
-                addMessage(\`📁 Analyzing \${files.length} file(s): \${files.map(f => f.name).join(', ')}\`, 'user');
+                addMessage('📁 Analyzing ' + files.length + ' file(s): ' + files.map(f => f.name).join(', '), 'user');
             }
             
-            // Clear inputs
             input.value = '';
             selectedFiles = [];
             updateFileList();
             sendButton.disabled = true;
             
-            // Show enhanced typing
-            showEnhancedTyping(message);
+            showTyping();
             
             try {
                 let file_ids = [];
                 
-                // Upload files
                 if (files.length > 0) {
                     for (let file of files) {
                         const uploadResponse = await uploadFile(file);
@@ -671,7 +550,6 @@ app.get('/', (req, res) => {
                     }
                 }
                 
-                // Send message with intelligence request
                 const response = await fetch('/api/chat/message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -685,17 +563,9 @@ app.get('/', (req, res) => {
                 if (response.ok) {
                     const data = await response.json();
                     hideTyping();
-                    
-                    // Enhanced response formatting
-                    const formattedResponse = formatIntelligenceResponse(data.response, data.intelligence_data);
-                    addMessage(formattedResponse, 'assistant');
-                    
-                    // Add PDF download if available
-                    if (data.report_id) {
-                        addDownloadSection(data.report_id);
-                    }
+                    addMessage(data.response, 'assistant');
                 } else {
-                    throw new Error(\`HTTP \${response.status}\`);
+                    throw new Error('HTTP ' + response.status);
                 }
                 
             } catch (error) {
@@ -707,7 +577,6 @@ app.get('/', (req, res) => {
             }
         }
         
-        // Upload file
         async function uploadFile(file) {
             try {
                 const formData = new FormData();
@@ -730,84 +599,25 @@ app.get('/', (req, res) => {
             }
         }
         
-        // Enhanced response formatting
-        function formatIntelligenceResponse(response, intelligenceData) {
-            // Add HTML formatting for better structure
-            let formatted = response
-                .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
-                .replace(/\\*(.*?)\\*/g, '<em>$1</em>')
-                .replace(/\\n\\n/g, '</p><p>')
-                .replace(/\\n/g, '<br>')
-                .replace(/^/, '<p>')
-                .replace(/$/, '</p>');
-            
-            return formatted;
-        }
-        
-        // Add download section
-        function addDownloadSection(reportId) {
-            const messagesContainer = document.getElementById('messages');
-            const downloadDiv = document.createElement('div');
-            downloadDiv.className = 'message assistant';
-            downloadDiv.innerHTML = \`
-                <div class="message-content">
-                    <div class="download-section">
-                        <h4><i class="fas fa-file-pdf"></i> Professional Report Available</h4>
-                        <p>Your comprehensive market intelligence report is ready for download.</p>
-                        <a href="/api/reports/\${reportId}/download" class="download-btn" target="_blank">
-                            <i class="fas fa-download"></i>
-                            Download PDF Report
-                        </a>
-                    </div>
-                </div>
-            \`;
-            messagesContainer.appendChild(downloadDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-        
-        // Enhanced typing indicator
-        function showEnhancedTyping(query) {
-            const messagesContainer = document.getElementById('messages');
-            const typingDiv = document.createElement('div');
-            typingDiv.id = 'typing';
-            typingDiv.className = 'message assistant';
-            
-            let typingText = '🧠 Analyzing market intelligence';
-            if (query.toLowerCase().includes('vs') || query.toLowerCase().includes('versus')) {
-                typingText = '⚔️ Running competitive analysis';
-            } else if (query.toLowerCase().includes('sentiment')) {
-                typingText = '📊 Processing sentiment data';
-            } else if (query.toLowerCase().includes('trends')) {
-                typingText = '📈 Analyzing market trends';
-            }
-            
-            typingDiv.innerHTML = \`
-                <div class="typing-indicator show">
-                    \${typingText}
-                    <div class="typing-dots">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </div>
-                </div>
-            \`;
-            messagesContainer.appendChild(typingDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-        
-        // Add message to chat
         function addMessage(content, sender) {
             const messagesContainer = document.getElementById('messages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = \`message \${sender}\`;
-            messageDiv.innerHTML = \`
-                <div class="message-content">\${content}</div>
-            \`;
+            messageDiv.className = 'message ' + sender;
+            messageDiv.innerHTML = '<div class="message-content">' + content + '</div>';
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
-        // Hide typing indicator
+        function showTyping() {
+            const messagesContainer = document.getElementById('messages');
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typing';
+            typingDiv.className = 'message assistant';
+            typingDiv.innerHTML = '<div class="typing-indicator show">🧠 Analyzing market intelligence...</div>';
+            messagesContainer.appendChild(typingDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
         function hideTyping() {
             const typingDiv = document.getElementById('typing');
             if (typingDiv) {
@@ -815,13 +625,11 @@ app.get('/', (req, res) => {
             }
         }
         
-        // Auto-resize textarea
         document.getElementById('messageInput').addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
         
-        // Enter key handling
         document.getElementById('messageInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -829,12 +637,13 @@ app.get('/', (req, res) => {
             }
         });
         
-        // Initialize on load
         window.addEventListener('load', initializeChat);
     </script>
 </body>
 </html>
-    `);
+    `;
+    
+    res.send(htmlContent);
 });
 
 // Create new chat thread
@@ -885,13 +694,14 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 // Enhanced message processing
 app.post('/api/chat/message', async (req, res) => {
     try {
-        const { thread_id, message, file_ids = [] } = req.body;
+        const { thread_id, message, file_ids } = req.body;
+        const fileIds = file_ids || [];
 
         if (!thread_id || !threads.has(thread_id)) {
             return res.status(400).json({ error: 'Invalid thread ID' });
         }
 
-        if (!message && file_ids.length === 0) {
+        if (!message && fileIds.length === 0) {
             return res.status(400).json({ error: 'Message or files required' });
         }
 
@@ -903,18 +713,15 @@ app.post('/api/chat/message', async (req, res) => {
         const industry = detectIndustry(safeMessage);
         
         const needsIntelligence = Object.values(intelligenceKeywords)
-            .flat()
+            .reduce((acc, keywords) => acc.concat(keywords), [])
             .some(keyword => safeMessage.toLowerCase().includes(keyword)) ||
-            file_ids.length > 0;
+            fileIds.length > 0;
 
         // Generate enhanced intelligence
         let intelligenceData = null;
         if (needsIntelligence) {
-            console.log(\`🧠 Generating \${industry} intelligence for:\`, safeMessage);
+            console.log('🧠 Generating ' + industry + ' intelligence for: ' + safeMessage);
             intelligenceData = generateEnhancedIntelligence(safeMessage, industry);
-            
-            // Store report for PDF generation
-            reports.set(intelligenceData.report_id, intelligenceData);
         }
 
         // Create enhanced message content
@@ -922,12 +729,12 @@ app.post('/api/chat/message', async (req, res) => {
         
         // Add intelligence data to message
         if (intelligenceData) {
-            const intelligenceText = \`\\n\\n[ENHANCED MARKET INTELLIGENCE DATA]\\n\${JSON.stringify(intelligenceData, null, 2)}\`;
+            const intelligenceText = '\n\n[ENHANCED MARKET INTELLIGENCE DATA]\n' + JSON.stringify(intelligenceData, null, 2);
             content[0].text += intelligenceText;
         }
         
         // Add file attachments
-        file_ids.forEach(fileId => {
+        fileIds.forEach(fileId => {
             content.push({ type: "file", file_id: fileId });
         });
 
@@ -951,8 +758,7 @@ app.post('/api/chat/message', async (req, res) => {
             response: result.message,
             thread_id: thread_id,
             status: 'completed',
-            intelligence_data: intelligenceData,
-            report_id: intelligenceData ? intelligenceData.report_id : null
+            intelligence_data: intelligenceData
         });
 
     } catch (error) {
@@ -961,266 +767,6 @@ app.post('/api/chat/message', async (req, res) => {
     }
 });
 
-// PDF Report generation endpoint
-app.get('/api/reports/:reportId/download', async (req, res) => {
-    try {
-        const reportId = req.params.reportId;
-        const reportData = reports.get(reportId);
-        
-        if (!reportData) {
-            return res.status(404).json({ error: 'Report not found' });
-        }
-
-        // Generate PDF HTML template
-        const htmlTemplate = generateReportHTML(reportData);
-        
-        const options = {
-            format: 'A4',
-            border: {
-                top: '0.5in',
-                right: '0.5in',
-                bottom: '0.5in',
-                left: '0.5in'
-            },
-            header: {
-                height: '20mm',
-                contents: '<div style="text-align: center; font-size: 10px; color: #666;">InsightEar GPT - Market Intelligence Report</div>'
-            },
-            footer: {
-                height: '20mm',
-                contents: '<div style="text-align: center; font-size: 10px; color: #666;">Page {{page}} of {{pages}} | Generated: ' + new Date().toLocaleDateString() + '</div>'
-            }
-        };
-
-        pdf.create(htmlTemplate, options).toBuffer((err, buffer) => {
-            if (err) {
-                console.error('PDF generation error:', err);
-                return res.status(500).json({ error: 'Failed to generate PDF' });
-            }
-
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', \`attachment; filename="InsightEar-Report-\${reportId}.pdf"\`);
-            res.send(buffer);
-        });
-
-    } catch (error) {
-        console.error('Report download error:', error);
-        res.status(500).json({ error: 'Failed to download report' });
-    }
-});
-
-// Generate PDF HTML template
-function generateReportHTML(data) {
-    return \`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            margin: 0; 
-            padding: 20px; 
-            color: #333; 
-            line-height: 1.6; 
-        }
-        .header { 
-            text-align: center; 
-            border-bottom: 3px solid #1e3c72; 
-            padding-bottom: 20px; 
-            margin-bottom: 30px; 
-        }
-        .logo { 
-            font-size: 28px; 
-            font-weight: bold; 
-            color: #1e3c72; 
-            margin-bottom: 10px; 
-        }
-        .subtitle { 
-            font-size: 16px; 
-            color: #666; 
-        }
-        .section { 
-            margin: 25px 0; 
-            page-break-inside: avoid; 
-        }
-        .section h2 { 
-            color: #1e3c72; 
-            border-left: 4px solid #2a5298; 
-            padding-left: 15px; 
-            margin-bottom: 15px; 
-        }
-        .metric-grid { 
-            display: grid; 
-            grid-template-columns: repeat(2, 1fr); 
-            gap: 20px; 
-            margin: 20px 0; 
-        }
-        .metric-card { 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border-left: 4px solid #2a5298; 
-        }
-        .metric-value { 
-            font-size: 24px; 
-            font-weight: bold; 
-            color: #1e3c72; 
-        }
-        .metric-label { 
-            font-size: 12px; 
-            color: #666; 
-            text-transform: uppercase; 
-        }
-        .source-item { 
-            background: white; 
-            border: 1px solid #e0e0e0; 
-            padding: 15px; 
-            margin: 10px 0; 
-            border-radius: 8px; 
-        }
-        .recommendation { 
-            background: #e8f4f8; 
-            border-left: 4px solid #17a2b8; 
-            padding: 15px; 
-            margin: 10px 0; 
-        }
-        .footer { 
-            margin-top: 40px; 
-            text-align: center; 
-            font-size: 12px; 
-            color: #666; 
-            border-top: 1px solid #e0e0e0; 
-            padding-top: 20px; 
-        }
-        ul { 
-            padding-left: 20px; 
-        }
-        li { 
-            margin: 8px 0; 
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">📊 InsightEar GPT</div>
-        <div class="subtitle">Enterprise Market Intelligence Report</div>
-        <div style="margin-top: 15px; font-size: 14px;">
-            <strong>Analysis:</strong> \${data.query}<br>
-            <strong>Industry:</strong> \${data.industry.charAt(0).toUpperCase() + data.industry.slice(1)}<br>
-            <strong>Generated:</strong> \${new Date(data.timestamp).toLocaleDateString()}
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>📋 Executive Summary</h2>
-        <p>Comprehensive market intelligence analysis for <strong>\${data.query}</strong> within the \${data.industry} sector. This report provides actionable insights based on analysis of \${data.sentiment_analysis.total_mentions} data points across multiple platforms with a confidence score of \${(data.sentiment_analysis.confidence_score * 100).toFixed(1)}%.</p>
-    </div>
-
-    <div class="section">
-        <h2>📊 Sentiment Overview</h2>
-        <div class="metric-grid">
-            <div class="metric-card">
-                <div class="metric-value">\${data.sentiment_analysis.positive_percentage}%</div>
-                <div class="metric-label">Positive Sentiment</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">\${data.sentiment_analysis.neutral_percentage}%</div>
-                <div class="metric-label">Neutral Sentiment</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">\${data.sentiment_analysis.negative_percentage}%</div>
-                <div class="metric-label">Negative Sentiment</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">\${data.sentiment_analysis.total_mentions}</div>
-                <div class="metric-label">Total Mentions</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>🌐 Data Sources</h2>
-        \${data.sources.map(source => \`
-            <div class="source-item">
-                <h4>\${source.platform}</h4>
-                <p><strong>Data Points:</strong> \${source.mentions || source.reviews || source.articles || 'N/A'}</p>
-                <p><strong>Sentiment:</strong> \${source.sentiment}</p>
-                <p><strong>Key Themes:</strong> \${source.key_themes.join(', ')}</p>
-                <p><strong>Source:</strong> <a href="\${source.url}">\${source.url}</a></p>
-            </div>
-        \`).join('')}
-    </div>
-
-    <div class="section">
-        <h2>🎯 Industry Insights</h2>
-        <div class="source-item">
-            <h4>Market Position</h4>
-            <p>\${data.industry_insights.market_position}</p>
-            
-            <h4>Competitive Advantages</h4>
-            <ul>
-                \${data.industry_insights.competitive_advantages.map(advantage => \`<li>\${advantage.replace(/_/g, ' ')}</li>\`).join('')}
-            </ul>
-            
-            <h4>Market Trends</h4>
-            <ul>
-                \${data.industry_insights.market_trends.map(trend => \`<li>\${trend.replace(/_/g, ' ')}</li>\`).join('')}
-            </ul>
-            
-            <h4>Risk Factors</h4>
-            <ul>
-                \${data.industry_insights.risk_factors.map(risk => \`<li>\${risk.replace(/_/g, ' ')}</li>\`).join('')}
-            </ul>
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>👥 Customer Persona Analysis</h2>
-        <div class="source-item">
-            <h4>Primary Segment</h4>
-            <p>\${data.persona_analysis.primary_segment}</p>
-            
-            <h4>Secondary Segment</h4>
-            <p>\${data.persona_analysis.secondary_segment}</p>
-            
-            <h4>Demographics</h4>
-            <ul>
-                \${data.persona_analysis.demographic_insights.map(demo => \`<li>\${demo}</li>\`).join('')}
-            </ul>
-            
-            <h4>Behavioral Patterns</h4>
-            <ul>
-                \${data.persona_analysis.behavioral_patterns.map(pattern => \`<li>\${pattern.replace(/-/g, ' ')}</li>\`).join('')}
-            </ul>
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>💡 Key Insights</h2>
-        <ul>
-            \${data.insights.map(insight => \`<li>\${insight}</li>\`).join('')}
-        </ul>
-    </div>
-
-    <div class="section">
-        <h2>🚀 Actionable Recommendations</h2>
-        \${data.recommendations.map(rec => \`
-            <div class="recommendation">
-                <strong>•</strong> \${rec}
-            </div>
-        \`).join('')}
-    </div>
-
-    <div class="footer">
-        <p><strong>Report ID:</strong> \${data.report_id} | <strong>Generated by:</strong> \${data.generated_by}</p>
-        <p>This report contains proprietary market intelligence. Distribution should be limited to authorized personnel.</p>
-    </div>
-</body>
-</html>
-    \`;
-}
-
 // Helper function to cancel active runs
 async function cancelActiveRuns(threadId) {
     try {
@@ -1228,7 +774,7 @@ async function cancelActiveRuns(threadId) {
         
         for (const run of runs.data) {
             if (['queued', 'in_progress', 'requires_action'].includes(run.status)) {
-                console.log(\`Cancelling active run: \${run.id}\`);
+                console.log('Cancelling active run: ' + run.id);
                 await openai.beta.threads.runs.cancel(threadId, run.id);
             }
         }
@@ -1240,8 +786,10 @@ async function cancelActiveRuns(threadId) {
 }
 
 // Wait for run completion
-async function waitForCompletion(threadId, runId, maxAttempts = 60) {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+async function waitForCompletion(threadId, runId, maxAttempts) {
+    const attempts = maxAttempts || 60;
+    
+    for (let attempt = 0; attempt < attempts; attempt++) {
         try {
             const run = await openai.beta.threads.runs.retrieve(threadId, runId);
             
@@ -1264,7 +812,7 @@ async function waitForCompletion(threadId, runId, maxAttempts = 60) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             
         } catch (error) {
-            console.error(\`Run check attempt \${attempt + 1} failed:\`, error);
+            console.error('Run check attempt ' + (attempt + 1) + ' failed:', error);
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
@@ -1278,15 +826,15 @@ app.get('/api/health', (req, res) => {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         assistant_id: ASSISTANT_ID ? 'configured' : 'missing',
-        features: ['file_upload', 'pdf_reports', 'industry_analysis', 'competitive_intelligence']
+        features: ['file_upload', 'industry_analysis', 'competitive_intelligence', 'enhanced_ui']
     });
 });
 
 // Start server
 app.listen(port, () => {
-    console.log(\`🚀 InsightEar GPT Enhanced server running on port \${port}\`);
-    console.log(\`📱 Widget URL: http://localhost:\${port}\`);
-    console.log(\`🤖 Assistant ID: \${ASSISTANT_ID || 'NOT SET'}\`);
-    console.log(\`✨ Features: PDF Reports, File Upload, Industry Analysis, Competitive Intelligence\`);
-    console.log(\`✅ Ready for enterprise market intelligence!\`);
+    console.log('🚀 InsightEar GPT Enhanced server running on port ' + port);
+    console.log('📱 Widget URL: http://localhost:' + port);
+    console.log('🤖 Assistant ID: ' + (ASSISTANT_ID || 'NOT SET'));
+    console.log('✨ Features: File Upload, Industry Analysis, Competitive Intelligence');
+    console.log('✅ Ready for enterprise market intelligence!');
 });
