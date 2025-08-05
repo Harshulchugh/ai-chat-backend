@@ -6,9 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const puppeteer = require('puppeteer');
 const Sentiment = require('sentiment');
-const { WordTokenizer } = require('natural');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -24,7 +22,7 @@ if (!OPENAI_API_KEY || !ASSISTANT_ID) {
     process.exit(1);
 }
 
-// Initialize OpenAI and sentiment analyzer
+// Initialize services
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const sentiment = new Sentiment();
 
@@ -41,35 +39,57 @@ const upload = multer({
 
 // In-memory storage
 const threads = new Map();
-const cache = new Map(); // Simple cache for API responses
+const cache = new Map();
 
-// ===== WEB CRAWLING FUNCTIONS =====
+// ===== REAL WEB CRAWLING FUNCTIONS =====
 
-// Reddit scraper
-async function scrapeReddit(query, limit = 50) {
+// Real Reddit scraper using public JSON API
+async function scrapeRedditRealtime(query, limit = 25) {
     try {
         console.log(`🔍 Scraping Reddit for: ${query}`);
         
-        // Search Reddit posts
-        const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=new&limit=${limit}`;
+        // Reddit search via public JSON API
+        const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=relevance&limit=${limit}&t=month`;
+        
         const response = await axios.get(searchUrl, {
             headers: {
-                'User-Agent': 'InsightEar-Bot/1.0'
-            }
+                'User-Agent': 'InsightEar-Market-Research-Bot/1.0',
+                'Accept': 'application/json'
+            },
+            timeout: 10000
         });
 
-        const posts = response.data.data.children.map(post => ({
-            title: post.data.title,
-            content: post.data.selftext,
-            score: post.data.score,
-            comments: post.data.num_comments,
-            subreddit: post.data.subreddit,
-            url: `https://reddit.com${post.data.permalink}`,
-            created: new Date(post.data.created_utc * 1000),
-            sentiment: sentiment.analyze(post.data.title + ' ' + post.data.selftext)
-        }));
+        if (!response.data || !response.data.data) {
+            throw new Error('Invalid Reddit API response');
+        }
 
-        console.log(`✅ Found ${posts.length} Reddit posts`);
+        const posts = response.data.data.children
+            .filter(post => post.data && post.data.title)
+            .map(post => {
+                const postData = post.data;
+                const text = (postData.title + ' ' + (postData.selftext || '')).toLowerCase();
+                const sentimentScore = sentiment.analyze(text);
+                
+                return {
+                    title: postData.title,
+                    content: postData.selftext || '',
+                    score: postData.score || 0,
+                    comments: postData.num_comments || 0,
+                    subreddit: postData.subreddit,
+                    url: `https://reddit.com${postData.permalink}`,
+                    created: new Date(postData.created_utc * 1000),
+                    upvote_ratio: postData.upvote_ratio || 0,
+                    sentiment: {
+                        score: sentimentScore.score,
+                        comparative: sentimentScore.comparative,
+                        positive: sentimentScore.positive,
+                        negative: sentimentScore.negative,
+                        classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral'
+                    }
+                };
+            });
+
+        console.log(`✅ Found ${posts.length} Reddit posts with sentiment analysis`);
         return posts;
 
     } catch (error) {
@@ -78,206 +98,386 @@ async function scrapeReddit(query, limit = 50) {
     }
 }
 
-// Amazon reviews scraper
-async function scrapeAmazonReviews(productQuery, limit = 30) {
+// Real review scraper from accessible sources
+async function scrapeProductReviews(productQuery, platform = 'general') {
     try {
-        console.log(`🛒 Scraping Amazon reviews for: ${productQuery}`);
+        console.log(`⭐ Scraping reviews for: ${productQuery} on ${platform}`);
         
-        const browser = await puppeteer.launch({ 
-            headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
+        let reviews = [];
         
-        // Search Amazon
-        await page.goto(`https://www.amazon.com/s?k=${encodeURIComponent(productQuery)}`);
-        await page.waitForSelector('[data-component-type="s-search-result"]', { timeout: 10000 });
+        if (platform === 'general' || platform === 'shopping') {
+            // Try to scrape from shopping comparison sites
+            const searchQuery = encodeURIComponent(productQuery + ' reviews');
+            const searchUrl = `https://duckduckgo.com/html/?q=${searchQuery}+site:consumerreports.com+OR+site:wirecutter.com+OR+site:rtings.com`;
+            
+            try {
+                const response = await axios.get(searchUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    },
+                    timeout: 8000
+                });
+
+                const $ = cheerio.load(response.data);
+                
+                // Extract review snippets from search results
+                $('.result__snippet, .result__body').each((i, element) => {
+                    if (i >= 10) return false; // Limit to 10 reviews
+                    
+                    const reviewText = $(element).text().trim();
+                    if (reviewText && reviewText.length > 50) {
+                        const sentimentScore = sentiment.analyze(reviewText);
+                        
+                        reviews.push({
+                            content: reviewText,
+                            source: 'Consumer Reviews',
+                            platform: platform,
+                            sentiment: {
+                                score: sentimentScore.score,
+                                classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral',
+                                positive_words: sentimentScore.positive,
+                                negative_words: sentimentScore.negative
+                            },
+                            scraped_at: new Date().toISOString()
+                        });
+                    }
+                });
+                
+            } catch (searchError) {
+                console.log('Search scraping failed, using alternate method');
+            }
+        }
         
-        // Get first product link
-        const firstProductLink = await page.$eval('[data-component-type="s-search-result"] h2 a', el => el.href);
-        
-        // Go to product page
-        await page.goto(firstProductLink);
-        
-        // Click on reviews section
-        try {
-            await page.click('[data-hook="see-all-reviews-link-foot"]');
-            await page.waitForSelector('[data-hook="review-body"]', { timeout: 5000 });
-        } catch {
-            // Try alternative selector
-            await page.goto(firstProductLink.replace('/dp/', '/product-reviews/'));
+        // If no reviews found, try Google shopping results
+        if (reviews.length === 0) {
+            try {
+                const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(productQuery + ' reviews rating')}&num=10`;
+                
+                const response = await axios.get(googleUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
+                    timeout: 8000
+                });
+
+                const $ = cheerio.load(response.data);
+                
+                // Extract review snippets from Google results
+                $('.VwiC3b, .hgKElc, .s3v9rd').each((i, element) => {
+                    if (i >= 15) return false;
+                    
+                    const reviewText = $(element).text().trim();
+                    if (reviewText && reviewText.length > 30 && reviewText.includes(productQuery.split(' ')[0])) {
+                        const sentimentScore = sentiment.analyze(reviewText);
+                        
+                        reviews.push({
+                            content: reviewText,
+                            source: 'Web Reviews',
+                            platform: 'Google Search',
+                            sentiment: {
+                                score: sentimentScore.score,
+                                classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral',
+                                positive_words: sentimentScore.positive,
+                                negative_words: sentimentScore.negative
+                            },
+                            scraped_at: new Date().toISOString()
+                        });
+                    }
+                });
+                
+            } catch (googleError) {
+                console.log('Google scraping failed');
+            }
         }
 
-        // Extract reviews
-        const reviews = await page.evaluate(() => {
-            const reviewElements = document.querySelectorAll('[data-hook="review"]');
-            return Array.from(reviewElements).slice(0, 30).map(review => {
-                const rating = review.querySelector('[data-hook="review-star-rating"]')?.textContent?.match(/(\d+)/)?.[1] || '0';
-                const title = review.querySelector('[data-hook="review-title"]')?.textContent?.trim() || '';
-                const body = review.querySelector('[data-hook="review-body"]')?.textContent?.trim() || '';
-                const date = review.querySelector('[data-hook="review-date"]')?.textContent?.trim() || '';
-                
-                return {
-                    rating: parseInt(rating),
-                    title: title,
-                    content: body,
-                    date: date,
-                    platform: 'Amazon'
-                };
-            });
-        });
-
-        await browser.close();
-        
-        // Add sentiment analysis
-        const analyzedReviews = reviews.map(review => ({
-            ...review,
-            sentiment: sentiment.analyze(review.title + ' ' + review.content)
-        }));
-
-        console.log(`✅ Found ${analyzedReviews.length} Amazon reviews`);
-        return analyzedReviews;
-
-    } catch (error) {
-        console.error('Amazon scraping error:', error.message);
-        return [];
-    }
-}
-
-// Google Reviews scraper
-async function scrapeGoogleReviews(businessQuery, limit = 20) {
-    try {
-        console.log(`📍 Scraping Google reviews for: ${businessQuery}`);
-        
-        const browser = await puppeteer.launch({ 
-            headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
-        
-        await page.goto(`https://www.google.com/search?q=${encodeURIComponent(businessQuery + ' reviews')}`);
-        await page.waitForSelector('.review-item', { timeout: 10000 });
-
-        const reviews = await page.evaluate(() => {
-            const reviewElements = document.querySelectorAll('.review-item');
-            return Array.from(reviewElements).slice(0, 20).map(review => {
-                const rating = review.querySelector('.review-rating')?.textContent || '0';
-                const content = review.querySelector('.review-snippet')?.textContent || '';
-                const author = review.querySelector('.review-author')?.textContent || '';
-                
-                return {
-                    rating: parseInt(rating.match(/\d+/)?.[0] || '0'),
-                    content: content,
-                    author: author,
-                    platform: 'Google'
-                };
-            });
-        });
-
-        await browser.close();
-
-        const analyzedReviews = reviews.map(review => ({
-            ...review,
-            sentiment: sentiment.analyze(review.content)
-        }));
-
-        console.log(`✅ Found ${analyzedReviews.length} Google reviews`);
-        return analyzedReviews;
-
-    } catch (error) {
-        console.error('Google reviews scraping error:', error.message);
-        return [];
-    }
-}
-
-// Trustpilot scraper
-async function scrapeTrustpilot(companyName, limit = 25) {
-    try {
-        console.log(`⭐ Scraping Trustpilot for: ${companyName}`);
-        
-        const searchUrl = `https://www.trustpilot.com/search?query=${encodeURIComponent(companyName)}`;
-        const response = await axios.get(searchUrl);
-        const $ = cheerio.load(response.data);
-        
-        // This is a simplified version - Trustpilot requires more sophisticated scraping
-        const reviews = [];
-        $('.review-card').each((i, element) => {
-            if (i >= limit) return false;
-            
-            const rating = $(element).find('.star-rating').attr('aria-label')?.match(/(\d+)/)?.[1] || '0';
-            const content = $(element).find('.review-content').text().trim();
-            const title = $(element).find('.review-title').text().trim();
-            
-            reviews.push({
-                rating: parseInt(rating),
-                title: title,
-                content: content,
-                platform: 'Trustpilot',
-                sentiment: sentiment.analyze(title + ' ' + content)
-            });
-        });
-
-        console.log(`✅ Found ${reviews.length} Trustpilot reviews`);
+        console.log(`✅ Found ${reviews.length} product reviews`);
         return reviews;
 
     } catch (error) {
-        console.error('Trustpilot scraping error:', error.message);
+        console.error('Review scraping error:', error.message);
         return [];
     }
 }
 
-// Social media sentiment tracker
-async function trackSocialSentiment(brandName, platforms = ['twitter', 'facebook']) {
+// Social media mentions scraper
+async function scrapeSocialMentions(brandQuery) {
     try {
-        console.log(`📱 Tracking social sentiment for: ${brandName}`);
+        console.log(`📱 Scraping social mentions for: ${brandQuery}`);
         
-        // This would integrate with social media APIs
-        // For demo purposes, we'll simulate data
-        const socialData = {
-            total_mentions: Math.floor(Math.random() * 1000) + 100,
-            positive_mentions: Math.floor(Math.random() * 60) + 20,
-            negative_mentions: Math.floor(Math.random() * 30) + 5,
-            neutral_mentions: Math.floor(Math.random() * 40) + 15,
-            trending_hashtags: [`#${brandName}`, `#${brandName}reviews`, `#${brandName}experience`],
-            top_topics: ['customer service', 'product quality', 'pricing', 'delivery'],
-            platforms: platforms
-        };
+        const mentions = [];
+        
+        // Try to find Twitter-like mentions from web search
+        const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(brandQuery)}+site:twitter.com+OR+site:facebook.com+OR+site:instagram.com`;
+        
+        try {
+            const response = await axios.get(searchUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                timeout: 8000
+            });
 
-        console.log(`✅ Social sentiment analysis complete`);
-        return socialData;
+            const $ = cheerio.load(response.data);
+            
+            $('.result__snippet').each((i, element) => {
+                if (i >= 20) return false;
+                
+                const mentionText = $(element).text().trim();
+                if (mentionText && mentionText.length > 20) {
+                    const sentimentScore = sentiment.analyze(mentionText);
+                    
+                    mentions.push({
+                        text: mentionText,
+                        platform: 'Social Media',
+                        sentiment: {
+                            score: sentimentScore.score,
+                            classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral'
+                        },
+                        scraped_at: new Date().toISOString()
+                    });
+                }
+            });
+            
+        } catch (scrapeError) {
+            console.log('Social scraping failed:', scrapeError.message);
+        }
+
+        console.log(`✅ Found ${mentions.length} social media mentions`);
+        return mentions;
 
     } catch (error) {
-        console.error('Social sentiment error:', error.message);
-        return null;
+        console.error('Social mentions error:', error.message);
+        return [];
+    }
+}
+
+// News and trend scraper
+async function scrapeNewsTrends(query) {
+    try {
+        console.log(`📰 Scraping news trends for: ${query}`);
+        
+        const newsItems = [];
+        const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query + ' news trends 2024 2025')}`;
+        
+        const response = await axios.get(searchUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout: 8000
+        });
+
+        const $ = cheerio.load(response.data);
+        
+        $('.result__title, .result__snippet').each((i, element) => {
+            if (i >= 15) return false;
+            
+            const newsText = $(element).text().trim();
+            if (newsText && newsText.length > 30) {
+                const sentimentScore = sentiment.analyze(newsText);
+                
+                newsItems.push({
+                    headline: newsText,
+                    sentiment: {
+                        score: sentimentScore.score,
+                        classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral'
+                    },
+                    scraped_at: new Date().toISOString()
+                });
+            }
+        });
+
+        console.log(`✅ Found ${newsItems.length} news items`);
+        return newsItems;
+
+    } catch (error) {
+        console.error('News scraping error:', error.message);
+        return [];
     }
 }
 
 // Comprehensive sentiment analysis
-function analyzeSentiment(textArray) {
-    const results = textArray.map(text => sentiment.analyze(text));
+function analyzeSentimentData(dataArray) {
+    if (!dataArray || dataArray.length === 0) {
+        return {
+            overall_sentiment: 'neutral',
+            confidence: 0,
+            distribution: { positive: 0, neutral: 0, negative: 0 },
+            total_analyzed: 0
+        };
+    }
+
+    const sentiments = dataArray.map(item => {
+        const text = typeof item === 'string' ? item : 
+                    item.content || item.text || item.title || item.headline || '';
+        return sentiment.analyze(text);
+    });
+
+    const totalScore = sentiments.reduce((sum, s) => sum + s.score, 0);
+    const avgScore = totalScore / sentiments.length;
     
-    const totalScore = results.reduce((sum, result) => sum + result.score, 0);
-    const avgScore = totalScore / results.length;
+    const positive = sentiments.filter(s => s.score > 0).length;
+    const negative = sentiments.filter(s => s.score < 0).length;
+    const neutral = sentiments.filter(s => s.score === 0).length;
     
-    const positive = results.filter(r => r.score > 0).length;
-    const negative = results.filter(r => r.score < 0).length;
-    const neutral = results.filter(r => r.score === 0).length;
+    const total = sentiments.length;
     
     return {
-        overall_sentiment: avgScore > 0 ? 'Positive' : avgScore < 0 ? 'Negative' : 'Neutral',
-        average_score: avgScore,
+        overall_sentiment: avgScore > 0.5 ? 'positive' : avgScore < -0.5 ? 'negative' : 'neutral',
+        average_score: Math.round(avgScore * 100) / 100,
+        confidence: Math.min(Math.abs(avgScore) * 20, 100),
         distribution: {
-            positive: Math.round((positive / results.length) * 100),
-            negative: Math.round((negative / results.length) * 100),
-            neutral: Math.round((neutral / results.length) * 100)
+            positive: Math.round((positive / total) * 100),
+            negative: Math.round((negative / total) * 100),
+            neutral: Math.round((neutral / total) * 100)
         },
-        total_analyzed: results.length
+        total_analyzed: total,
+        key_positive_words: [...new Set(sentiments.flatMap(s => s.positive))].slice(0, 10),
+        key_negative_words: [...new Set(sentiments.flatMap(s => s.negative))].slice(0, 10)
     };
+}
+
+// Master web intelligence function
+async function gatherWebIntelligence(query) {
+    try {
+        console.log(`🌐 Gathering comprehensive web intelligence for: ${query}`);
+        
+        const startTime = Date.now();
+        const results = {
+            query: query,
+            timestamp: new Date().toISOString(),
+            sources: [],
+            summary: {}
+        };
+
+        // Extract main topic from query
+        const words = query.toLowerCase().split(' ');
+        const stopWords = ['sentiment', 'analysis', 'review', 'customer', 'feedback', 'social', 'media', 'what', 'how', 'the', 'and', 'for', 'are'];
+        const keywords = words.filter(word => word.length > 3 && !stopWords.includes(word));
+        const mainTopic = keywords[0] || query.split(' ')[0];
+
+        console.log(`🎯 Analyzing main topic: ${mainTopic}`);
+
+        // Parallel data gathering for speed
+        const [redditData, reviewData, socialData, newsData] = await Promise.all([
+            scrapeRedditRealtime(mainTopic, 20),
+            scrapeProductReviews(mainTopic, 'general'),
+            scrapeSocialMentions(mainTopic),
+            scrapeNewsTrends(mainTopic)
+        ]);
+
+        // Process Reddit data
+        if (redditData && redditData.length > 0) {
+            const redditSentiment = analyzeSentimentData(redditData.map(post => post.title + ' ' + post.content));
+            results.sources.push({
+                platform: 'Reddit',
+                type: 'Community Discussions',
+                data_points: redditData.length,
+                sentiment_analysis: redditSentiment,
+                top_posts: redditData.slice(0, 5).map(post => ({
+                    title: post.title,
+                    score: post.score,
+                    comments: post.comments,
+                    sentiment: post.sentiment.classification,
+                    subreddit: post.subreddit
+                }))
+            });
+        }
+
+        // Process review data
+        if (reviewData && reviewData.length > 0) {
+            const reviewSentiment = analyzeSentimentData(reviewData.map(review => review.content));
+            results.sources.push({
+                platform: 'Product Reviews',
+                type: 'Customer Feedback',
+                data_points: reviewData.length,
+                sentiment_analysis: reviewSentiment,
+                sample_reviews: reviewData.slice(0, 3).map(review => ({
+                    content: review.content.substring(0, 200) + '...',
+                    sentiment: review.sentiment.classification,
+                    source: review.source
+                }))
+            });
+        }
+
+        // Process social data
+        if (socialData && socialData.length > 0) {
+            const socialSentiment = analyzeSentimentData(socialData.map(mention => mention.text));
+            results.sources.push({
+                platform: 'Social Media',
+                type: 'Brand Mentions',
+                data_points: socialData.length,
+                sentiment_analysis: socialSentiment
+            });
+        }
+
+        // Process news data
+        if (newsData && newsData.length > 0) {
+            const newsSentiment = analyzeSentimentData(newsData.map(news => news.headline));
+            results.sources.push({
+                platform: 'News & Trends',
+                type: 'Market Coverage',
+                data_points: newsData.length,
+                sentiment_analysis: newsSentiment,
+                trending_topics: newsData.slice(0, 3).map(news => news.headline.substring(0, 100))
+            });
+        }
+
+        // Generate comprehensive summary
+        const allSentiments = [...redditData, ...reviewData, ...socialData, ...newsData];
+        if (allSentiments.length > 0) {
+            results.summary = {
+                total_data_points: allSentiments.length,
+                overall_sentiment: analyzeSentimentData(allSentiments),
+                key_insights: [
+                    `Found ${allSentiments.length} data points across ${results.sources.length} platforms`,
+                    `Reddit shows ${redditData.length} community discussions`,
+                    `Reviews indicate ${reviewData.length} customer feedback instances`,
+                    `Social media contains ${socialData.length} brand mentions`
+                ],
+                recommendations: generateRecommendations(results.sources),
+                processing_time: `${Date.now() - startTime}ms`
+            };
+        }
+
+        console.log(`✅ Web intelligence complete - ${allSentiments.length} data points in ${Date.now() - startTime}ms`);
+        return results;
+
+    } catch (error) {
+        console.error('Web intelligence error:', error);
+        return {
+            query: query,
+            error: 'Failed to gather web intelligence',
+            timestamp: new Date().toISOString()
+        };
+    }
+}
+
+// Generate actionable recommendations
+function generateRecommendations(sources) {
+    const recommendations = [];
+    
+    sources.forEach(source => {
+        const sentiment = source.sentiment_analysis;
+        if (sentiment && sentiment.overall_sentiment === 'positive') {
+            recommendations.push(`Leverage positive ${source.type.toLowerCase()} sentiment in marketing`);
+        } else if (sentiment && sentiment.overall_sentiment === 'negative') {
+            recommendations.push(`Address concerns raised in ${source.type.toLowerCase()}`);
+        }
+    });
+
+    if (recommendations.length === 0) {
+        recommendations.push('Monitor sentiment trends regularly');
+        recommendations.push('Engage with customer feedback');
+        recommendations.push('Track competitor discussions');
+    }
+
+    return recommendations;
 }
 
 // ===== API ROUTES =====
 
-// Existing routes (thread, upload, health)
+// Create new chat thread
 app.post('/api/chat/thread', async (req, res) => {
     try {
         const thread = await openai.beta.threads.create();
@@ -293,6 +493,7 @@ app.post('/api/chat/thread', async (req, res) => {
     }
 });
 
+// Upload file
 app.post('/api/chat/upload', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
@@ -322,7 +523,7 @@ app.post('/api/chat/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// Enhanced message handler with web crawling
+// Enhanced message handler with REAL web crawling
 app.post('/api/chat/message', async (req, res) => {
     try {
         const { thread_id, message, file_ids = [] } = req.body;
@@ -335,27 +536,27 @@ app.post('/api/chat/message', async (req, res) => {
             return res.status(400).json({ error: 'Message or files required' });
         }
 
-        // Check if message requires web crawling
-        const webCrawlingKeywords = ['sentiment', 'reviews', 'reddit', 'social media', 'customer feedback', 'brand monitoring', 'competitor analysis'];
-        const needsWebCrawling = webCrawlingKeywords.some(keyword => 
+        // Detect web intelligence requests
+        const webKeywords = ['sentiment', 'review', 'customer', 'feedback', 'social', 'reddit', 'analysis', 'competitor', 'market', 'brand', 'opinion'];
+        const needsWebIntelligence = webKeywords.some(keyword => 
             message.toLowerCase().includes(keyword.toLowerCase())
         );
 
-        let webData = null;
-        if (needsWebCrawling) {
-            console.log('🌐 Web crawling detected, gathering data...');
-            webData = await gatherWebIntelligence(message);
+        let webIntelligence = null;
+        if (needsWebIntelligence) {
+            console.log('🔍 Web intelligence request detected, gathering real-time data...');
+            webIntelligence = await gatherWebIntelligence(message);
         }
 
         await cancelActiveRuns(thread_id);
 
         let content = [{ type: "text", text: message }];
         
-        // Add web data if available
-        if (webData) {
+        // Add web intelligence data
+        if (webIntelligence && webIntelligence.sources) {
             content.push({
                 type: "text",
-                text: `\n\nWEB INTELLIGENCE DATA:\n${JSON.stringify(webData, null, 2)}`
+                text: `\n\n🌐 LIVE WEB INTELLIGENCE DATA:\n${JSON.stringify(webIntelligence, null, 2)}`
             });
         }
         
@@ -382,7 +583,8 @@ app.post('/api/chat/message', async (req, res) => {
             response: result.message,
             thread_id: thread_id,
             status: 'completed',
-            web_data_included: !!webData
+            web_intelligence_included: !!webIntelligence,
+            data_sources: webIntelligence ? webIntelligence.sources.length : 0
         });
 
     } catch (error) {
@@ -391,41 +593,48 @@ app.post('/api/chat/message', async (req, res) => {
     }
 });
 
-// NEW: Direct web crawling endpoints
-app.post('/api/crawl/reddit', async (req, res) => {
+// Direct web intelligence endpoints
+app.post('/api/intelligence/comprehensive', async (req, res) => {
     try {
-        const { query, limit = 50 } = req.body;
-        const data = await scrapeReddit(query, limit);
-        res.json({ status: 'success', data, count: data.length });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/crawl/reviews', async (req, res) => {
-    try {
-        const { query, platform = 'amazon', limit = 30 } = req.body;
-        
-        let data = [];
-        if (platform === 'amazon') {
-            data = await scrapeAmazonReviews(query, limit);
-        } else if (platform === 'google') {
-            data = await scrapeGoogleReviews(query, limit);
-        } else if (platform === 'trustpilot') {
-            data = await scrapeTrustpilot(query, limit);
+        const { query } = req.body;
+        if (!query) {
+            return res.status(400).json({ error: 'Query required' });
         }
         
-        res.json({ status: 'success', platform, data, count: data.length });
+        const intelligence = await gatherWebIntelligence(query);
+        res.json({ status: 'success', data: intelligence });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-app.post('/api/sentiment/analyze', async (req, res) => {
+app.post('/api/intelligence/reddit', async (req, res) => {
     try {
-        const { texts } = req.body;
-        const analysis = analyzeSentiment(texts);
-        res.json({ status: 'success', analysis });
+        const { query, limit = 25 } = req.body;
+        const data = await scrapeRedditRealtime(query, limit);
+        const sentiment = analyzeSentimentData(data.map(post => post.title + ' ' + post.content));
+        res.json({ 
+            status: 'success', 
+            data: data, 
+            sentiment_analysis: sentiment,
+            count: data.length 
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/intelligence/reviews', async (req, res) => {
+    try {
+        const { query, platform = 'general' } = req.body;
+        const data = await scrapeProductReviews(query, platform);
+        const sentiment = analyzeSentimentData(data.map(review => review.content));
+        res.json({ 
+            status: 'success', 
+            data: data, 
+            sentiment_analysis: sentiment,
+            count: data.length 
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -436,67 +645,21 @@ app.get('/api/health', (req, res) => {
         status: 'healthy',
         assistant_id: ASSISTANT_ID ? 'configured' : 'missing',
         timestamp: new Date().toISOString(),
-        web_crawling: 'enabled',
-        sentiment_analysis: 'enabled'
+        web_crawling: 'ENABLED - REAL-TIME',
+        sentiment_analysis: 'ENABLED',
+        features: ['Reddit API', 'Review Scraping', 'Social Monitoring', 'News Trends'],
+        version: '3.0-production'
     });
 });
 
-// Comprehensive web intelligence gathering
-async function gatherWebIntelligence(query) {
-    try {
-        const results = {
-            timestamp: new Date().toISOString(),
-            query: query,
-            sources: []
-        };
-
-        // Simple keyword extraction instead of natural library
-       const tokenizer = new WordTokenizer();
-const tokens = tokenizer.tokenize(query.toLowerCase());
-            .split(' ')
-            .filter(word => word.length > 3)
-            .filter(word => !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'].includes(word));
-        
-        if (keywords.length > 0) {
-            const mainTopic = keywords[0];
-            
-            // Parallel data gathering
-            const [redditData, socialData] = await Promise.all([
-                scrapeReddit(mainTopic, 30),
-                trackSocialSentiment(mainTopic)
-            ]);
-
-            if (redditData.length > 0) {
-                results.sources.push({
-                    platform: 'Reddit',
-                    data: redditData,
-                    sentiment_summary: analyzeSentiment(redditData.map(post => post.title + ' ' + post.content))
-                });
-            }
-
-            if (socialData) {
-                results.sources.push({
-                    platform: 'Social Media',
-                    data: socialData
-                });
-            }
-        }
-
-        return results;
-    } catch (error) {
-        console.error('Web intelligence gathering error:', error);
-        return null;
-    }
-}
-
-// Serve chat widget HTML (same as before but with enhanced capabilities mentioned)
+// Serve enhanced chat widget
 app.get('/', (req, res) => {
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InsightEar GPT - AI Market Intelligence</title>
+    <title>InsightEar GPT - Real-Time Market Intelligence</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         .ai-chat-widget {
@@ -517,6 +680,12 @@ app.get('/', (req, res) => {
             animation: pulse 2s infinite;
         }
         @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
+        .crawling-badge {
+            background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%);
+            color: white; padding: 4px 8px; border-radius: 12px; font-size: 10px;
+            margin-left: 8px; animation: glow 3s infinite;
+        }
+        @keyframes glow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.05); } }
         .chat-messages {
             flex: 1; overflow-y: auto; padding: 20px;
             background: linear-gradient(to bottom, #f8f9fa 0%, #e9ecef 100%);
@@ -601,12 +770,12 @@ app.get('/', (req, res) => {
             0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
             40% { transform: scale(1); opacity: 1; }
         }
-        .web-indicator {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white; padding: 4px 8px; border-radius: 12px; font-size: 10px;
-            margin-left: 8px; animation: glow 2s infinite;
+        .web-data-badge {
+            background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%);
+            color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px;
+            margin-top: 8px; display: inline-block; animation: shimmer 2s infinite;
         }
-        @keyframes glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        @keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
         .file-attachment {
             background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 8px; padding: 8px 12px; margin-top: 8px; font-size: 12px;
@@ -625,16 +794,16 @@ app.get('/', (req, res) => {
         <div class="chat-header">
             <div class="status-dot"></div>
             🧠 InsightEar GPT
-            <div class="web-indicator">WEB ENABLED</div>
+            <div class="crawling-badge">LIVE CRAWLING</div>
         </div>
         
         <div class="chat-messages" id="chatMessages">
             <div class="message assistant">
                 <div class="message-avatar">IE</div>
                 <div class="message-content">
-                    🚀 Welcome to InsightEar GPT! I can analyze real-time sentiment, scrape reviews from Reddit/Amazon/Trustpilot, monitor social media, and provide actionable market insights. 
+                    🚀 Welcome to InsightEar GPT with <strong>LIVE WEB CRAWLING</strong>! I can analyze real-time sentiment from Reddit, scrape product reviews, monitor social media, and provide actionable market intelligence.
                     <br><br>
-                    Try asking: "Analyze customer sentiment for [product]" or "What are people saying about [brand] on Reddit?"
+                    Try: "Analyze customer sentiment for Tesla" or "What are Reddit users saying about iPhone?"
                 </div>
             </div>
         </div>
@@ -642,7 +811,7 @@ app.get('/', (req, res) => {
         <div class="typing-indicator" id="typingIndicator">
             <div class="message-avatar">IE</div>
             <div>
-                Analyzing web data
+                Crawling live web data
                 <div class="typing-dots">
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
@@ -654,7 +823,7 @@ app.get('/', (req, res) => {
         <div class="chat-input-container">
             <div id="filePreview"></div>
             <div class="input-wrapper">
-                <textarea id="chatInput" class="chat-input" placeholder="Ask about sentiment analysis, competitor research, or market insights..." rows="1"></textarea>
+                <textarea id="chatInput" class="chat-input" placeholder="Ask for real-time sentiment analysis, Reddit insights, or market intelligence..." rows="1"></textarea>
                 <div class="input-controls">
                     <label for="fileInput" class="control-btn file-btn" title="Upload file">📎</label>
                     <input type="file" id="fileInput" class="file-input" multiple />
@@ -782,12 +951,12 @@ app.get('/', (req, res) => {
             const filesToSend = currentFiles.slice();
             clearFiles();
             
-            // Show enhanced typing indicator for web crawling
-            const webKeywords = ['sentiment', 'reviews', 'reddit', 'social', 'brand', 'competitor'];
+            // Show web crawling indicator for intelligence requests
+            const webKeywords = ['sentiment', 'reddit', 'review', 'social', 'customer', 'feedback', 'analysis', 'market'];
             const isWebQuery = webKeywords.some(keyword => message.toLowerCase().includes(keyword));
             
             if (isWebQuery) {
-                showWebTypingIndicator();
+                showWebCrawlingIndicator();
             } else {
                 showTypingIndicator();
             }
@@ -821,8 +990,8 @@ app.get('/', (req, res) => {
                 hideTypingIndicator();
                 addMessage('assistant', data.response);
                 
-                if (data.web_data_included) {
-                    addWebIndicator();
+                if (data.web_intelligence_included) {
+                    addWebDataBadge(data.data_sources || 'multiple');
                 }
                 
             } catch (error) {
@@ -889,9 +1058,9 @@ app.get('/', (req, res) => {
             container.scrollTop = container.scrollHeight; 
         }
         
-        function showWebTypingIndicator() {
+        function showWebCrawlingIndicator() {
             const indicator = document.getElementById('typingIndicator');
-            indicator.querySelector('div:nth-child(2)').innerHTML = 'Crawling web data<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+            indicator.querySelector('div:nth-child(2)').innerHTML = 'Crawling live web data<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
             indicator.style.display = 'flex';
             const container = document.getElementById('chatMessages');
             container.scrollTop = container.scrollHeight; 
@@ -900,16 +1069,15 @@ app.get('/', (req, res) => {
         function hideTypingIndicator() { 
             document.getElementById('typingIndicator').style.display = 'none';
             // Reset typing text
-            document.getElementById('typingIndicator').querySelector('div:nth-child(2)').innerHTML = 'Analyzing web data<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+            document.getElementById('typingIndicator').querySelector('div:nth-child(2)').innerHTML = 'Crawling live web data<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
         }
         
-        function addWebIndicator() {
+        function addWebDataBadge(sources) {
             const lastMessage = document.querySelector('.message.assistant:last-child .message-content');
             if (lastMessage && !lastMessage.querySelector('.web-data-badge')) {
                 const badge = document.createElement('div');
                 badge.className = 'web-data-badge';
-                badge.style.cssText = 'background: #28a745; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; margin-top: 8px; display: inline-block;';
-                badge.textContent = '🌐 Live Web Data';
+                badge.textContent = '🌐 Live Web Data (' + sources + ' sources)';
                 lastMessage.appendChild(badge);
             }
         }
@@ -931,7 +1099,7 @@ app.get('/', (req, res) => {
     res.send(html);
 });
 
-// Helper functions (same as before)
+// Helper functions
 async function cancelActiveRuns(threadId) {
     try {
         const runs = await openai.beta.threads.runs.list(threadId);
@@ -995,12 +1163,12 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 app.listen(port, () => {
-    console.log(`🚀 InsightEar GPT server running on port ${port}`);
-    console.log(`🧠 AI Market Intelligence: http://localhost:${port}`);
-    console.log(`🌐 Web Crawling: ENABLED`);
-    console.log(`📊 Sentiment Analysis: ENABLED`);
+    console.log(`🚀 InsightEar GPT with REAL WEB CRAWLING running on port ${port}`);
+    console.log(`🌐 Live Data Sources: Reddit API, Review Scraping, Social Monitoring`);
+    console.log(`📊 Real-time Sentiment Analysis: ENABLED`);
+    console.log(`🧠 Market Intelligence: http://localhost:${port}`);
     console.log(`🤖 Assistant ID: ${ASSISTANT_ID}`);
-    console.log(`✅ Ready for enterprise market intelligence!`);
+    console.log(`✅ Ready for live market intelligence!`);
 });
 
 module.exports = app;
