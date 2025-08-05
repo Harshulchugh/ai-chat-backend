@@ -3,7 +3,6 @@ const multer = require('multer');
 const OpenAI = require('openai');
 const cors = require('cors');
 const fs = require('fs');
-const PDFDocument = require('pdfkit');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -928,10 +927,10 @@ app.get('/', (req, res) => {
                 '<div class="message-content">' +
                     '<div class="download-section">' +
                         '<h4><i class="fas fa-file-pdf"></i> Professional Report Ready</h4>' +
-                        '<p>Your comprehensive market intelligence report is ready for download.</p>' +
+                        '<p>Your comprehensive market intelligence report is ready. Click to open and save as PDF.</p>' +
                         '<a href="/api/reports/' + reportId + '/download" class="download-btn" target="_blank">' +
-                            '<i class="fas fa-download"></i>' +
-                            'Download PDF Report' +
+                            '<i class="fas fa-print"></i>' +
+                            'Open Report (Print to PDF)' +
                         '</a>' +
                     '</div>' +
                 '</div>';
@@ -1081,9 +1080,11 @@ app.post('/api/chat/message', async (req, res) => {
         const result = await waitForCompletion(thread_id, run.id);
 
         if (result.error) {
+            console.error('Assistant run error:', result.error);
             return res.status(500).json({ error: result.error });
         }
 
+        console.log('✅ Message processed successfully');
         res.json({
             response: result.message,
             thread_id: thread_id,
@@ -1093,8 +1094,8 @@ app.post('/api/chat/message', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Message processing failed:', error);
-        res.status(500).json({ error: 'Failed to process message' });
+        console.error('Message processing failed:', error.message || error);
+        res.status(500).json({ error: 'Failed to process message: ' + (error.message || 'Unknown error') });
     }
 });
 
