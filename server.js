@@ -7,31 +7,27 @@ const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize OpenAI
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
 const ASSISTANT_ID = process.env.ASSISTANT_ID;
 
-// Basic middleware
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 
-// Configure multer for file uploads
 const upload = multer({
     dest: 'uploads/',
     limits: { fileSize: 20 * 1024 * 1024 }
 });
 
-// Store active threads
 const threads = new Map();
+const reports = new Map();
 
-// Enhanced intelligence keywords by industry
 const intelligenceKeywords = {
     general: ['sentiment', 'analysis', 'reviews', 'feedback', 'customers', 'saying', 'opinion', 'perception'],
     automotive: ['tesla', 'bmw', 'ford', 'toyota', 'mercedes', 'audi', 'car', 'vehicle', 'automotive'],
-    technology: ['apple', 'google', 'microsoft', 'tech', 'software', 'ai', 'cloud', 'mobile'],
+    technology: ['nvidia', 'apple', 'google', 'microsoft', 'tech', 'software', 'ai', 'cloud', 'mobile', 'chip'],
     retail: ['amazon', 'walmart', 'target', 'shopping', 'ecommerce', 'retail', 'store'],
     food: ['mcdonalds', 'starbucks', 'food', 'restaurant', 'dining', 'cuisine', 'menu'],
     finance: ['bank', 'financial', 'investment', 'trading', 'crypto', 'fintech'],
@@ -39,7 +35,6 @@ const intelligenceKeywords = {
     consumer: ['kirkland', 'brand', 'product', 'consumer', 'household', 'quality']
 };
 
-// Detect industry from query
 function detectIndustry(query) {
     const queryLower = query.toLowerCase();
     
@@ -52,21 +47,19 @@ function detectIndustry(query) {
         }
     }
     
-    return 'consumer'; // default
+    return 'consumer';
 }
 
-// Enhanced market intelligence function
 function generateEnhancedIntelligence(query, industry) {
     console.log('🧠 Generating ' + industry + ' intelligence for: ' + query);
     
-    // Detect competitive analysis
     const isComparison = query.toLowerCase().includes(' vs ') || 
                         query.toLowerCase().includes(' versus ') ||
                         query.toLowerCase().includes('compare');
     
-    const positivePercent = Math.floor(Math.random() * 20) + 60; // 60-80%
-    const neutralPercent = Math.floor(Math.random() * 15) + 15;  // 15-30%
-    const negativePercent = Math.max(1, 100 - positivePercent - neutralPercent); // Ensure positive number
+    const positivePercent = Math.floor(Math.random() * 20) + 60;
+    const neutralPercent = Math.floor(Math.random() * 15) + 15;
+    const negativePercent = Math.max(1, 100 - positivePercent - neutralPercent);
     
     const intelligence = {
         query: query,
@@ -89,7 +82,7 @@ function generateEnhancedIntelligence(query, industry) {
                 url: "https://reddit.com/search?q=" + encodeURIComponent(query),
                 mentions: Math.floor(Math.random() * 100) + 50,
                 sentiment: "positive",
-                key_themes: ["value", "quality", "reliable"],
+                key_themes: ["innovation", "performance", "technology"],
                 engagement_score: 8.2
             },
             {
@@ -97,7 +90,7 @@ function generateEnhancedIntelligence(query, industry) {
                 url: "https://google.com/search?q=" + encodeURIComponent(query) + "+reviews",
                 reviews: Math.floor(Math.random() * 200) + 100,
                 average_rating: (Math.random() * 1.5 + 3.5).toFixed(1),
-                key_themes: ["good value", "quality product", "customer satisfaction"],
+                key_themes: ["quality", "performance", "value"],
                 verified_purchases: 85,
                 sentiment: "positive"
             },
@@ -106,7 +99,7 @@ function generateEnhancedIntelligence(query, industry) {
                 url: "https://twitter.com/search?q=" + encodeURIComponent(query),
                 mentions: Math.floor(Math.random() * 150) + 75,
                 sentiment: "mixed",
-                key_themes: ["brand awareness", "customer experience"],
+                key_themes: ["brand awareness", "innovation"],
                 reach: "2.4M impressions"
             },
             {
@@ -114,37 +107,37 @@ function generateEnhancedIntelligence(query, industry) {
                 url: "https://news.google.com/search?q=" + encodeURIComponent(query),
                 articles: Math.floor(Math.random() * 25) + 15,
                 sentiment: "neutral",
-                key_themes: ["market position", "industry trends"],
+                key_themes: ["market trends", "industry developments"],
                 media_score: 7.1
             }
         ],
         
         industry_insights: {
-            market_position: "Strong performer in the " + industry + " sector",
-            competitive_advantages: ["price_point", "brand_trust"],
-            market_trends: ["digital_transformation", "sustainability", "personalization"],
-            risk_factors: ["market_saturation", "price_competition", "regulatory_changes"]
+            market_position: "Leading performer in the " + industry + " sector",
+            competitive_advantages: ["innovation_leadership", "market_share"],
+            market_trends: ["ai_acceleration", "cloud_computing", "autonomous_systems"],
+            risk_factors: ["market_competition", "regulatory_changes", "supply_chain"]
         },
         
         persona_analysis: {
-            primary_segment: "Value-conscious consumers (35%)",
-            secondary_segment: "Quality-focused buyers (28%)",
-            demographic_insights: ["25-45 age group", "household income $50-100K", "urban/suburban"],
-            behavioral_patterns: ["research-driven", "price-sensitive", "brand-loyal"]
+            primary_segment: "Tech enthusiasts and professionals (40%)",
+            secondary_segment: "Enterprise decision makers (35%)",
+            demographic_insights: ["25-45 age group", "high-income tech professionals", "early adopters"],
+            behavioral_patterns: ["research-driven", "performance-focused", "innovation-seeking"]
         },
         
         insights: [
             "Strong " + industry + " market performance with " + positivePercent + "% positive sentiment",
-            "Quality consistently mentioned as key strength",
-            "Competitive positioning favorable against industry benchmarks",
-            "Customer satisfaction indicators above sector average"
+            "Innovation and performance consistently mentioned as key strengths",
+            "Leading market position with strong competitive advantages",
+            "High engagement from tech professionals and enthusiasts"
         ],
         
         recommendations: [
-            "Leverage positive quality perception in marketing campaigns",
-            "Monitor competitive developments in digital transformation",
-            "Enhance customer retention through improved price point strategy",
-            "Capitalize on market opportunities in sustainability trends"
+            "Leverage innovation leadership in marketing campaigns",
+            "Target enterprise segment with performance-focused messaging",
+            "Monitor competitive developments in AI and cloud computing",
+            "Capitalize on positive sentiment among tech professionals"
         ],
         
         report_id: 'RPT-' + Date.now(),
@@ -154,7 +147,6 @@ function generateEnhancedIntelligence(query, industry) {
     return intelligence;
 }
 
-// Enhanced UI with better formatting
 app.get('/', (req, res) => {
     const htmlContent = `
 <!DOCTYPE html>
@@ -162,9 +154,8 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InsightEar GPT - Enterprise Market Intelligence</title>
+    <title>InsightEar GPT - Market Intelligence</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -184,11 +175,11 @@ app.get('/', (req, res) => {
         
         .chat-container {
             background: white;
-            border-radius: 24px;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.15);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
             width: 100%;
-            max-width: 800px;
-            height: 700px;
+            max-width: 700px;
+            height: 650px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -197,56 +188,35 @@ app.get('/', (req, res) => {
         .chat-header {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             color: white;
-            padding: 25px;
+            padding: 20px;
             text-align: center;
-            position: relative;
         }
         
         .logo {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 5px;
         }
         
         .tagline {
-            font-size: 14px;
+            font-size: 13px;
             opacity: 0.9;
             font-weight: 400;
-        }
-        
-        .status-indicators {
-            position: absolute;
-            top: 15px;
-            right: 20px;
-            display: flex;
-            gap: 8px;
-        }
-        
-        .status-badge {
-            background: rgba(255,255,255,0.2);
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 500;
         }
         
         .messages-container {
             flex: 1;
             overflow-y: auto;
-            padding: 25px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 15px;
             background: #f8f9fa;
         }
         
         .message {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             animation: slideIn 0.3s ease-out;
         }
         
@@ -256,11 +226,10 @@ app.get('/', (req, res) => {
         
         .message-content {
             max-width: 85%;
-            padding: 16px 20px;
-            border-radius: 20px;
+            padding: 14px 18px;
+            border-radius: 18px;
             font-size: 14px;
-            line-height: 1.6;
-            position: relative;
+            line-height: 1.5;
         }
         
         .message.assistant .message-content {
@@ -270,12 +239,17 @@ app.get('/', (req, res) => {
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }
         
+        .message.user .message-content {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+        }
+        
         .message.assistant .message-content h3 {
             color: #1e3c72;
-            font-size: 18px;
-            margin-bottom: 15px;
+            font-size: 16px;
+            margin-bottom: 12px;
             border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -283,8 +257,8 @@ app.get('/', (req, res) => {
         
         .message.assistant .message-content h4 {
             color: #2d3748;
-            font-size: 16px;
-            margin: 20px 0 10px 0;
+            font-size: 14px;
+            margin: 16px 0 8px 0;
             font-weight: 600;
             display: flex;
             align-items: center;
@@ -293,91 +267,76 @@ app.get('/', (req, res) => {
         
         .sentiment-overview {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin: 12px 0;
         }
         
         .sentiment-card {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            padding: 15px;
-            border-radius: 12px;
+            padding: 12px;
+            border-radius: 10px;
             text-align: center;
-            border-left: 4px solid #1e3c72;
+            border-left: 3px solid #1e3c72;
         }
         
         .sentiment-value {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
             color: #1e3c72;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .sentiment-label {
-            font-size: 12px;
+            font-size: 11px;
             color: #6c757d;
             text-transform: uppercase;
             font-weight: 500;
         }
         
-        .progress-bar {
-            background: #e9ecef;
-            border-radius: 10px;
-            height: 8px;
-            margin: 8px 0;
-            overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.8s ease;
-        }
-        
-        .progress-positive { background: linear-gradient(90deg, #28a745, #20c997); }
-        .progress-neutral { background: linear-gradient(90deg, #ffc107, #fd7e14); }
-        .progress-negative { background: linear-gradient(90deg, #dc3545, #e83e8c); }
-        
         .source-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 12px 0;
         }
         
         .source-card {
             background: #f8f9fa;
             border: 1px solid #e9ecef;
-            border-radius: 12px;
-            padding: 15px;
+            border-radius: 10px;
+            padding: 12px;
             transition: transform 0.2s;
+            font-size: 13px;
         }
         
         .source-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         
         .source-platform {
             font-weight: bold;
             color: #1e3c72;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            font-size: 14px;
         }
         
         .insights-list {
             background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 15px 0;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 12px 0;
         }
         
         .insights-list li {
-            margin: 10px 0;
-            padding-left: 20px;
+            margin: 8px 0;
+            padding-left: 18px;
             position: relative;
+            font-size: 13px;
         }
         
         .insights-list li::before {
@@ -388,37 +347,60 @@ app.get('/', (req, res) => {
         
         .recommendations-grid {
             display: grid;
-            gap: 10px;
-            margin: 15px 0;
+            gap: 8px;
+            margin: 12px 0;
         }
         
         .recommendation-card {
             background: linear-gradient(135deg, #e8f4f8 0%, #d1ecf1 100%);
-            border-left: 4px solid #17a2b8;
-            padding: 15px;
-            border-radius: 8px;
+            border-left: 3px solid #17a2b8;
+            padding: 12px;
+            border-radius: 6px;
             transition: transform 0.2s;
+            font-size: 13px;
         }
         
         .recommendation-card:hover {
-            transform: translateX(5px);
+            transform: translateX(3px);
+        }
+        
+        .persona-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin: 12px 0;
+        }
+        
+        .persona-card {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+        }
+        
+        .persona-percentage {
+            font-size: 18px;
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 4px;
         }
         
         .download-section {
             background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
             border: 1px solid #c3e6cb;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
             text-align: center;
         }
         
         .download-btn {
             background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
             color: white;
-            padding: 12px 24px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: 500;
             text-decoration: none;
@@ -426,49 +408,23 @@ app.get('/', (req, res) => {
             align-items: center;
             gap: 8px;
             transition: transform 0.2s;
+            font-size: 13px;
         }
         
         .download-btn:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
         }
         
-        .persona-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
-        }
-        
-        .persona-card {
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            border: 1px solid #ffeaa7;
-            border-radius: 12px;
-            padding: 15px;
-            text-align: center;
-        }
-        
-        .persona-percentage {
-            font-size: 20px;
-            font-weight: bold;
-            color: #856404;
-            margin-bottom: 5px;
-        }
-        
-        .message.user .message-content {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: white;
-        }
-        
         .input-container {
-            padding: 25px;
+            padding: 20px;
             border-top: 1px solid #e2e8f0;
             background: white;
         }
         
         .input-wrapper {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: flex-end;
         }
         
@@ -480,12 +436,12 @@ app.get('/', (req, res) => {
         .message-input {
             width: 100%;
             border: 2px solid #e2e8f0;
-            border-radius: 16px;
-            padding: 14px 50px 14px 18px;
+            border-radius: 14px;
+            padding: 12px 45px 12px 16px;
             font-size: 14px;
             resize: none;
-            max-height: 120px;
-            min-height: 50px;
+            max-height: 100px;
+            min-height: 44px;
             font-family: inherit;
             transition: border-color 0.2s;
         }
@@ -497,16 +453,16 @@ app.get('/', (req, res) => {
         
         .file-input-btn {
             position: absolute;
-            right: 12px;
+            right: 10px;
             top: 50%;
             transform: translateY(-50%);
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 18px;
+            font-size: 16px;
             color: #718096;
-            padding: 8px;
-            border-radius: 8px;
+            padding: 6px;
+            border-radius: 6px;
             transition: background 0.2s;
         }
         
@@ -520,14 +476,14 @@ app.get('/', (req, res) => {
             color: white;
             border: none;
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            width: 44px;
+            height: 44px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: transform 0.2s;
-            font-size: 18px;
+            font-size: 16px;
         }
         
         .send-button:hover {
@@ -541,21 +497,21 @@ app.get('/', (req, res) => {
         }
         
         .file-list {
-            margin-top: 10px;
+            margin-top: 8px;
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
         }
         
         .file-tag {
             background: #e2e8f0;
-            padding: 4px 12px;
-            border-radius: 16px;
-            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
             color: #2d3748;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
         
         .file-tag .remove {
@@ -566,11 +522,11 @@ app.get('/', (req, res) => {
         
         .typing-indicator {
             display: none;
-            padding: 16px 20px;
+            padding: 14px 18px;
             background: white;
             border: 1px solid #e2e8f0;
-            border-radius: 20px;
-            font-size: 14px;
+            border-radius: 18px;
+            font-size: 13px;
             color: #718096;
             max-width: 85%;
         }
@@ -580,47 +536,40 @@ app.get('/', (req, res) => {
         }
         
         @keyframes slideIn {
-            from { opacity: 0; transform: translateY(20px); }
+            from { opacity: 0; transform: translateY(15px); }
             to { opacity: 1; transform: translateY(0); }
         }
         
         @media (max-width: 768px) {
             body { padding: 10px; }
-            .chat-container { height: 90vh; max-width: 100%; }
+            .chat-container { height: 85vh; max-width: 100%; }
             .messages-container { padding: 15px; }
             .input-container { padding: 15px; }
+            .sentiment-overview { grid-template-columns: repeat(2, 1fr); }
+            .source-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            <div class="status-indicators">
-                <div class="status-badge">🧠 AI Enabled</div>
-                <div class="status-badge">📊 Intelligence Ready</div>
-                <div class="status-badge">📁 Files Supported</div>
-            </div>
-            <div class="logo">
-                <i class="fas fa-chart-line"></i>
-                InsightEar GPT
-            </div>
-            <div class="tagline">Enterprise Market Intelligence & Sentiment Analysis Platform</div>
+            <div class="logo">InsightEar GPT</div>
+            <div class="tagline">Market Intelligence Platform</div>
         </div>
         
         <div class="messages-container" id="messages">
             <div class="message assistant">
                 <div class="message-content">
-                    <h3><i class="fas fa-brain"></i> Welcome to InsightEar GPT Enterprise</h3>
-                    <p><strong>Enhanced Capabilities:</strong></p>
-                    <ul>
-                        <li><strong>Industry Analysis</strong> - Automotive, Tech, Retail, Finance, Healthcare</li>
-                        <li><strong>Competitive Intelligence</strong> - Brand vs Brand comparisons</li>
-                        <li><strong>Sentiment Analysis</strong> - Multi-platform sentiment tracking</li>
-                        <li><strong>Customer Personas</strong> - Detailed demographic insights</li>
-                        <li><strong>File Upload</strong> - Analyze your own data files</li>
-                        <li><strong>Professional Reports</strong> - Comprehensive analysis with sources</li>
+                    <h3>Welcome to InsightEar GPT</h3>
+                    <p><strong>Market Intelligence Capabilities:</strong></p>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li><strong>Sentiment Analysis</strong> - Multi-platform tracking</li>
+                        <li><strong>Competitive Intelligence</strong> - Brand comparisons</li>
+                        <li><strong>Industry Analysis</strong> - Sector-specific insights</li>
+                        <li><strong>Customer Personas</strong> - Demographic analysis</li>
+                        <li><strong>Professional Reports</strong> - PDF downloads</li>
                     </ul>
-                    <p><strong>Try asking:</strong> "Tesla vs BMW analysis" or "Starbucks customer sentiment"</p>
+                    <p><strong>Try asking:</strong> "Tesla vs BMW analysis" or "Nvidia market trends"</p>
                 </div>
             </div>
         </div>
@@ -751,12 +700,10 @@ app.get('/', (req, res) => {
                     const data = await response.json();
                     hideTyping();
                     
-                    // Enhanced response formatting
                     if (data.intelligence_data) {
                         const formattedResponse = formatIntelligenceReport(data.response, data.intelligence_data);
                         addMessage(formattedResponse, 'assistant');
                         
-                        // Add PDF download section if report available
                         if (data.report_id) {
                             addDownloadSection(data.report_id);
                         }
@@ -798,6 +745,124 @@ app.get('/', (req, res) => {
             }
         }
         
+        function formatIntelligenceReport(response, intelligenceData) {
+            const sentiment = intelligenceData.sentiment_analysis;
+            const sources = intelligenceData.sources;
+            const insights = intelligenceData.insights;
+            const recommendations = intelligenceData.recommendations;
+            const persona = intelligenceData.persona_analysis;
+            
+            return '<div class="intelligence-report">' +
+                '<h3><i class="fas fa-chart-line"></i> ' + intelligenceData.query + ' - Market Intelligence</h3>' +
+                
+                '<h4><i class="fas fa-heart"></i> Sentiment Overview</h4>' +
+                '<div class="sentiment-overview">' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value" style="color: #28a745;">' + sentiment.positive_percentage + '%</div>' +
+                        '<div class="sentiment-label">Positive</div>' +
+                    '</div>' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value" style="color: #ffc107;">' + sentiment.neutral_percentage + '%</div>' +
+                        '<div class="sentiment-label">Neutral</div>' +
+                    '</div>' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value" style="color: #dc3545;">' + sentiment.negative_percentage + '%</div>' +
+                        '<div class="sentiment-label">Negative</div>' +
+                    '</div>' +
+                    '<div class="sentiment-card">' +
+                        '<div class="sentiment-value">' + sentiment.total_mentions + '</div>' +
+                        '<div class="sentiment-label">Total Mentions</div>' +
+                    '</div>' +
+                '</div>' +
+                
+                '<h4><i class="fas fa-globe"></i> Data Sources</h4>' +
+                '<div class="source-grid">' +
+                    sources.map(source => 
+                        '<div class="source-card">' +
+                            '<div class="source-platform">' +
+                                getSourceIcon(source.platform) + ' ' + source.platform +
+                            '</div>' +
+                            '<div><strong>Data:</strong> ' + (source.mentions || source.reviews || source.articles || 'N/A') + '</div>' +
+                            '<div><strong>Sentiment:</strong> <span style="color: ' + getSentimentColor(source.sentiment) + '">' + source.sentiment + '</span></div>' +
+                            '<div style="font-size: 11px; margin-top: 4px;"><strong>Themes:</strong> ' + source.key_themes.join(', ') + '</div>' +
+                            '<a href="' + source.url + '" target="_blank" style="color: #1e3c72; text-decoration: none; font-size: 11px;"><i class="fas fa-external-link-alt"></i> Source</a>' +
+                        '</div>'
+                    ).join('') +
+                '</div>' +
+                
+                '<h4><i class="fas fa-users"></i> Customer Personas</h4>' +
+                '<div class="persona-cards">' +
+                    '<div class="persona-card">' +
+                        '<div class="persona-percentage">40%</div>' +
+                        '<div style="font-size: 11px;">' + persona.primary_segment + '</div>' +
+                    '</div>' +
+                    '<div class="persona-card">' +
+                        '<div class="persona-percentage">35%</div>' +
+                        '<div style="font-size: 11px;">' + persona.secondary_segment + '</div>' +
+                    '</div>' +
+                '</div>' +
+                
+                '<h4><i class="fas fa-lightbulb"></i> Key Insights</h4>' +
+                '<div class="insights-list">' +
+                    '<ul>' + insights.map(insight => '<li>' + insight + '</li>').join('') + '</ul>' +
+                '</div>' +
+                
+                '<h4><i class="fas fa-rocket"></i> Strategic Recommendations</h4>' +
+                '<div class="recommendations-grid">' +
+                    recommendations.map(rec => 
+                        '<div class="recommendation-card">' +
+                            '<i class="fas fa-arrow-right"></i> ' + rec +
+                        '</div>'
+                    ).join('') +
+                '</div>' +
+                
+                '<div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; font-size: 11px; color: #6c757d; text-align: center;">' +
+                    '<strong>Report:</strong> ' + intelligenceData.report_id + ' | ' +
+                    '<strong>Industry:</strong> ' + intelligenceData.industry + ' | ' +
+                    '<strong>Generated:</strong> ' + new Date(intelligenceData.timestamp).toLocaleTimeString() +
+                '</div>' +
+            '</div>';
+        }
+        
+        function addDownloadSection(reportId) {
+            const messagesContainer = document.getElementById('messages');
+            const downloadDiv = document.createElement('div');
+            downloadDiv.className = 'message assistant';
+            downloadDiv.innerHTML = 
+                '<div class="message-content">' +
+                    '<div class="download-section">' +
+                        '<h4><i class="fas fa-file-pdf"></i> Professional Report Ready</h4>' +
+                        '<p>Your comprehensive market intelligence report is ready.</p>' +
+                        '<a href="/api/reports/' + reportId + '/download" class="download-btn" target="_blank">' +
+                            '<i class="fas fa-print"></i>' +
+                            'Open Report (Save as PDF)' +
+                        '</a>' +
+                    '</div>' +
+                '</div>';
+            messagesContainer.appendChild(downloadDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function getSourceIcon(platform) {
+            const icons = {
+                'Reddit': '<i class="fab fa-reddit" style="color: #ff4500;"></i>',
+                'Product Reviews': '<i class="fas fa-star" style="color: #ffc107;"></i>',
+                'Social Media': '<i class="fas fa-hashtag" style="color: #1da1f2;"></i>',
+                'News & Media': '<i class="fas fa-newspaper" style="color: #6c757d;"></i>'
+            };
+            return icons[platform] || '<i class="fas fa-globe"></i>';
+        }
+        
+        function getSentimentColor(sentiment) {
+            const colors = {
+                'positive': '#28a745',
+                'neutral': '#ffc107',
+                'negative': '#dc3545',
+                'mixed': '#17a2b8'
+            };
+            return colors[sentiment] || '#6c757d';
+        }
+        
         function addMessage(content, sender) {
             const messagesContainer = document.getElementById('messages');
             const messageDiv = document.createElement('div');
@@ -826,7 +891,7 @@ app.get('/', (req, res) => {
         
         document.getElementById('messageInput').addEventListener('input', function() {
             this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
         });
         
         document.getElementById('messageInput').addEventListener('keypress', function(e) {
@@ -835,128 +900,6 @@ app.get('/', (req, res) => {
                 sendMessage();
             }
         });
-        
-        function formatIntelligenceReport(response, intelligenceData) {
-            // Extract key data
-            const sentiment = intelligenceData.sentiment_analysis;
-            const sources = intelligenceData.sources;
-            const insights = intelligenceData.insights;
-            const recommendations = intelligenceData.recommendations;
-            const persona = intelligenceData.persona_analysis;
-            
-            return '<div class="intelligence-report">' +
-                '<h3><i class="fas fa-chart-line"></i> ' + intelligenceData.query + ' - Market Intelligence Report</h3>' +
-                
-                '<h4><i class="fas fa-heart"></i> Sentiment Overview</h4>' +
-                '<div class="sentiment-overview">' +
-                    '<div class="sentiment-card">' +
-                        '<div class="sentiment-value" style="color: #28a745;">' + sentiment.positive_percentage + '%</div>' +
-                        '<div class="sentiment-label">Positive</div>' +
-                        '<div class="progress-bar"><div class="progress-fill progress-positive" style="width: ' + sentiment.positive_percentage + '%"></div></div>' +
-                    '</div>' +
-                    '<div class="sentiment-card">' +
-                        '<div class="sentiment-value" style="color: #ffc107;">' + sentiment.neutral_percentage + '%</div>' +
-                        '<div class="sentiment-label">Neutral</div>' +
-                        '<div class="progress-bar"><div class="progress-fill progress-neutral" style="width: ' + sentiment.neutral_percentage + '%"></div></div>' +
-                    '</div>' +
-                    '<div class="sentiment-card">' +
-                        '<div class="sentiment-value" style="color: #dc3545;">' + sentiment.negative_percentage + '%</div>' +
-                        '<div class="sentiment-label">Negative</div>' +
-                        '<div class="progress-bar"><div class="progress-fill progress-negative" style="width: ' + sentiment.negative_percentage + '%"></div></div>' +
-                    '</div>' +
-                    '<div class="sentiment-card">' +
-                        '<div class="sentiment-value">' + sentiment.total_mentions + '</div>' +
-                        '<div class="sentiment-label">Total Mentions</div>' +
-                    '</div>' +
-                '</div>' +
-                
-                '<h4><i class="fas fa-globe"></i> Data Sources</h4>' +
-                '<div class="source-grid">' +
-                    sources.map(source => 
-                        '<div class="source-card">' +
-                            '<div class="source-platform">' +
-                                getSourceIcon(source.platform) + ' ' + source.platform +
-                            '</div>' +
-                            '<div><strong>Data Points:</strong> ' + (source.mentions || source.reviews || source.articles || 'N/A') + '</div>' +
-                            '<div><strong>Sentiment:</strong> <span style="color: ' + getSentimentColor(source.sentiment) + '">' + source.sentiment + '</span></div>' +
-                            '<div><strong>Themes:</strong> ' + source.key_themes.join(', ') + '</div>' +
-                            '<a href="' + source.url + '" target="_blank" style="color: #1e3c72; text-decoration: none;"><i class="fas fa-external-link-alt"></i> View Source</a>' +
-                        '</div>'
-                    ).join('') +
-                '</div>' +
-                
-                '<h4><i class="fas fa-users"></i> Customer Personas</h4>' +
-                '<div class="persona-cards">' +
-                    '<div class="persona-card">' +
-                        '<div class="persona-percentage">35%</div>' +
-                        '<div>' + persona.primary_segment + '</div>' +
-                    '</div>' +
-                    '<div class="persona-card">' +
-                        '<div class="persona-percentage">28%</div>' +
-                        '<div>' + persona.secondary_segment + '</div>' +
-                    '</div>' +
-                '</div>' +
-                
-                '<h4><i class="fas fa-lightbulb"></i> Key Insights</h4>' +
-                '<div class="insights-list">' +
-                    '<ul>' + insights.map(insight => '<li>' + insight + '</li>').join('') + '</ul>' +
-                '</div>' +
-                
-                '<h4><i class="fas fa-rocket"></i> Strategic Recommendations</h4>' +
-                '<div class="recommendations-grid">' +
-                    recommendations.map(rec => 
-                        '<div class="recommendation-card">' +
-                            '<i class="fas fa-arrow-right"></i> ' + rec +
-                        '</div>'
-                    ).join('') +
-                '</div>' +
-                
-                '<div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 12px; color: #6c757d;">' +
-                    '<strong>Report ID:</strong> ' + intelligenceData.report_id + ' | ' +
-                    '<strong>Industry:</strong> ' + intelligenceData.industry + ' | ' +
-                    '<strong>Generated:</strong> ' + new Date(intelligenceData.timestamp).toLocaleString() +
-                '</div>' +
-            '</div>';
-        }
-        
-        function addDownloadSection(reportId) {
-            const messagesContainer = document.getElementById('messages');
-            const downloadDiv = document.createElement('div');
-            downloadDiv.className = 'message assistant';
-            downloadDiv.innerHTML = 
-                '<div class="message-content">' +
-                    '<div class="download-section">' +
-                        '<h4><i class="fas fa-file-pdf"></i> Professional Report Ready</h4>' +
-                        '<p>Your comprehensive market intelligence report is ready. Click to open and save as PDF.</p>' +
-                        '<a href="/api/reports/' + reportId + '/download" class="download-btn" target="_blank">' +
-                            '<i class="fas fa-print"></i>' +
-                            'Open Report (Print to PDF)' +
-                        '</a>' +
-                    '</div>' +
-                '</div>';
-            messagesContainer.appendChild(downloadDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-        
-        function getSourceIcon(platform) {
-            const icons = {
-                'Reddit': '<i class="fab fa-reddit" style="color: #ff4500;"></i>',
-                'Product Reviews': '<i class="fas fa-star" style="color: #ffc107;"></i>',
-                'Social Media': '<i class="fas fa-hashtag" style="color: #1da1f2;"></i>',
-                'News & Media': '<i class="fas fa-newspaper" style="color: #6c757d;"></i>'
-            };
-            return icons[platform] || '<i class="fas fa-globe"></i>';
-        }
-        
-        function getSentimentColor(sentiment) {
-            const colors = {
-                'positive': '#28a745',
-                'neutral': '#ffc107',
-                'negative': '#dc3545',
-                'mixed': '#17a2b8'
-            };
-            return colors[sentiment] || '#6c757d';
-        }
         
         window.addEventListener('load', initializeChat);
     </script>
@@ -967,7 +910,6 @@ app.get('/', (req, res) => {
     res.send(htmlContent);
 });
 
-// Create new chat thread
 app.post('/api/chat/create', async (req, res) => {
     try {
         const thread = await openai.beta.threads.create();
@@ -986,7 +928,6 @@ app.post('/api/chat/create', async (req, res) => {
     }
 });
 
-// Handle file uploads
 app.post('/api/upload', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
@@ -998,7 +939,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             purpose: 'assistants'
         });
 
-        // Clean up temp file
         fs.unlinkSync(req.file.path);
 
         res.json({
@@ -1012,10 +952,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// Store reports for PDF generation
-const reports = new Map();
-
-// Enhanced message processing
 app.post('/api/chat/message', async (req, res) => {
     try {
         const { thread_id, message, file_ids } = req.body;
@@ -1029,10 +965,8 @@ app.post('/api/chat/message', async (req, res) => {
             return res.status(400).json({ error: 'Message or files required' });
         }
 
-        // Cancel any active runs
         await cancelActiveRuns(thread_id);
 
-        // Enhanced intelligence detection
         const safeMessage = message || '';
         const industry = detectIndustry(safeMessage);
         
@@ -1041,36 +975,49 @@ app.post('/api/chat/message', async (req, res) => {
             .some(keyword => safeMessage.toLowerCase().includes(keyword)) ||
             fileIds.length > 0;
 
-        // Generate enhanced intelligence
         let intelligenceData = null;
         if (needsIntelligence) {
             try {
                 console.log('🧠 Generating ' + industry + ' intelligence for: ' + safeMessage);
                 intelligenceData = generateEnhancedIntelligence(safeMessage, industry);
                 
-                // Store report for PDF generation
                 if (intelligenceData && intelligenceData.report_id) {
                     reports.set(intelligenceData.report_id, intelligenceData);
                 }
             } catch (error) {
                 console.error('Intelligence generation error:', error);
-                // Continue without intelligence data if generation fails
             }
         }
 
-        // Prepare message with proper file attachments
+        let content = [{ type: "text", text: safeMessage }];
+        
+        if (intelligenceData) {
+            const intelligenceText = '\n\n[ENHANCED MARKET INTELLIGENCE DATA]\n' + JSON.stringify(intelligenceData, null, 2);
+            
+            if ((safeMessage + intelligenceText).length > 30000) {
+                console.log('⚠️ Intelligence data too large, using summary');
+                const summary = {
+                    query: intelligenceData.query,
+                    industry: intelligenceData.industry,
+                    sentiment: intelligenceData.sentiment_analysis,
+                    key_insights: intelligenceData.insights,
+                    recommendations: intelligenceData.recommendations.slice(0, 3)
+                };
+                content[0].text += '\n\n[MARKET INTELLIGENCE SUMMARY]\n' + JSON.stringify(summary, null, 2);
+            } else {
+                content[0].text += intelligenceText;
+            }
+        }
+        
         const messageData = {
             role: "user",
             content: safeMessage + (intelligenceData ? '\n\n[ENHANCED MARKET INTELLIGENCE DATA]\n' + JSON.stringify(intelligenceData, null, 2) : '')
         };
         
-        // Add file attachments using the correct OpenAI format if files exist
         if (fileIds.length > 0) {
-            // Add file info to the message text instead of attachments
             messageData.content += '\n\n[FILE ANALYSIS REQUEST]\nFiles uploaded for analysis: ' + fileIds.length + ' file(s)\nFile IDs: ' + fileIds.join(', ');
         }
 
-        // Send to assistant
         await openai.beta.threads.messages.create(thread_id, messageData);
 
         const run = await openai.beta.threads.runs.create(thread_id, {
@@ -1099,7 +1046,6 @@ app.post('/api/chat/message', async (req, res) => {
     }
 });
 
-// Real PDF Report generation endpoint
 app.get('/api/reports/:reportId/download', async (req, res) => {
     try {
         const reportId = req.params.reportId;
@@ -1109,218 +1055,147 @@ app.get('/api/reports/:reportId/download', async (req, res) => {
             return res.status(404).json({ error: 'Report not found' });
         }
 
-        // Create PDF document
-        const doc = new PDFDocument({ margin: 50 });
+        const htmlContent = generatePrintableReport(reportData);
         
-        // Set response headers for PDF download
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename="InsightEar-Report-' + reportId + '.pdf"');
-        
-        // Pipe the PDF to response
-        doc.pipe(res);
-        
-        // Generate professional PDF content
-        generateProfessionalPDF(doc, reportData);
-        
-        // Finalize the PDF
-        doc.end();
+        res.setHeader('Content-Type', 'text/html');
+        res.setHeader('Content-Disposition', 'inline; filename="InsightEar-Report-' + reportId + '.html"');
+        res.send(htmlContent);
 
     } catch (error) {
-        console.error('PDF generation error:', error);
-        res.status(500).json({ error: 'Failed to generate PDF report' });
+        console.error('Report generation error:', error);
+        res.status(500).json({ error: 'Failed to generate report' });
     }
 });
 
-// Generate professional PDF with charts and formatting
-function generateProfessionalPDF(doc, data) {
-    const pageWidth = doc.page.width - 100; // Account for margins
-    
-    // Header with branding
-    doc.fontSize(24)
-       .fillColor('#1e3c72')
-       .text('📊 InsightEar GPT', 50, 50)
-       .fontSize(16)
-       .fillColor('#666666')
-       .text('Enterprise Market Intelligence Report', 50, 80);
-    
-    // Query and metadata
-    doc.fontSize(12)
-       .fillColor('#333333')
-       .text('Analysis: ' + data.query, 50, 110)
-       .text('Industry: ' + data.industry, 50, 125)
-       .text('Generated: ' + new Date(data.timestamp).toLocaleDateString(), 50, 140)
-       .text('Report ID: ' + data.report_id, 50, 155);
-    
-    // Draw line
-    doc.moveTo(50, 180)
-       .lineTo(pageWidth + 50, 180)
-       .strokeColor('#1e3c72')
-       .lineWidth(2)
-       .stroke();
-    
-    let yPosition = 200;
-    
-    // Executive Summary
-    doc.fontSize(16)
-       .fillColor('#1e3c72')
-       .text('EXECUTIVE SUMMARY', 50, yPosition);
-    
-    yPosition += 25;
-    doc.fontSize(11)
-       .fillColor('#333333')
-       .text('Comprehensive analysis of ' + data.query + ' across ' + data.sentiment_analysis.total_mentions + ' mentions', 50, yPosition, { width: pageWidth });
-    
-    yPosition += 40;
-    
-    // Sentiment Overview with visual bars
-    doc.fontSize(16)
-       .fillColor('#1e3c72')
-       .text('SENTIMENT OVERVIEW', 50, yPosition);
-    
-    yPosition += 30;
-    
-    // Draw sentiment bars
-    const sentimentData = [
-        { label: 'Positive', value: data.sentiment_analysis.positive_percentage, color: '#28a745' },
-        { label: 'Neutral', value: data.sentiment_analysis.neutral_percentage, color: '#ffc107' },
-        { label: 'Negative', value: data.sentiment_analysis.negative_percentage, color: '#dc3545' }
-    ];
-    
-    sentimentData.forEach((item, index) => {
-        const barY = yPosition + (index * 25);
-        const barWidth = (item.value / 100) * 200;
+function generatePrintableReport(data) {
+    return '<!DOCTYPE html>' +
+        '<html><head><meta charset="UTF-8">' +
+        '<title>InsightEar GPT Report - ' + data.query + '</title>' +
+        '<style>' +
+        '@media print { .no-print { display: none !important; } }' +
+        'body { font-family: Arial, sans-serif; margin: 0; padding: 40px; color: #333; line-height: 1.6; background: white; }' +
+        '.header { text-align: center; border-bottom: 3px solid #1e3c72; padding-bottom: 20px; margin-bottom: 30px; }' +
+        '.logo { font-size: 32px; font-weight: bold; color: #1e3c72; margin-bottom: 10px; }' +
+        '.subtitle { font-size: 18px; color: #666; margin-bottom: 15px; }' +
+        '.meta { font-size: 14px; color: #333; }' +
+        '.section { margin: 30px 0; page-break-inside: avoid; }' +
+        '.section h2 { color: #1e3c72; font-size: 20px; border-left: 4px solid #2a5298; padding-left: 15px; margin-bottom: 15px; }' +
+        '.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }' +
+        '.metric-card { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #2a5298; text-align: center; }' +
+        '.metric-value { font-size: 28px; font-weight: bold; color: #1e3c72; margin-bottom: 5px; }' +
+        '.metric-label { font-size: 14px; color: #666; text-transform: uppercase; font-weight: 500; }' +
+        '.source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 20px 0; }' +
+        '.source-card { background: white; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; }' +
+        '.source-platform { font-weight: bold; color: #1e3c72; margin-bottom: 10px; font-size: 16px; }' +
+        '.recommendation { background: #e8f4f8; border-left: 4px solid #17a2b8; padding: 15px; margin: 10px 0; border-radius: 5px; }' +
+        '.insights ul { list-style: none; padding: 0; }' +
+        '.insights li { background: #f8f9fa; padding: 12px; margin: 8px 0; border-left: 4px solid #28a745; border-radius: 5px; }' +
+        '.print-btn { background: #1e3c72; color: white; padding: 15px 30px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 20px 0; }' +
+        '.print-btn:hover { background: #2a5298; }' +
+        '.footer { margin-top: 50px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #e0e0e0; padding-top: 20px; }' +
+        '</style>' +
+        '<script>' +
+        'function saveAsPDF() { ' +
+        '  document.querySelector(".print-btn").style.display = "none"; ' +
+        '  window.print(); ' +
+        '  setTimeout(() => { document.querySelector(".print-btn").style.display = "block"; }, 1000); ' +
+        '}' +
+        '</script>' +
+        '</head><body>' +
         
-        // Draw bar background
-        doc.rect(50, barY, 200, 15)
-           .fillColor('#f0f0f0')
-           .fill();
+        '<div class="header">' +
+        '  <div class="logo">InsightEar GPT</div>' +
+        '  <div class="subtitle">Enterprise Market Intelligence Report</div>' +
+        '  <div class="meta">' +
+        '    <strong>Analysis:</strong> ' + data.query + '<br>' +
+        '    <strong>Industry:</strong> ' + data.industry.charAt(0).toUpperCase() + data.industry.slice(1) + '<br>' +
+        '    <strong>Generated:</strong> ' + new Date(data.timestamp).toLocaleDateString() + '<br>' +
+        '    <strong>Report ID:</strong> ' + data.report_id +
+        '  </div>' +
+        '</div>' +
         
-        // Draw filled bar
-        doc.rect(50, barY, barWidth, 15)
-           .fillColor(item.color)
-           .fill();
+        '<div class="no-print" style="text-align: center; margin: 20px 0;">' +
+        '  <button class="print-btn" onclick="saveAsPDF()">🖨️ Save as PDF</button>' +
+        '</div>' +
         
-        // Add label and percentage
-        doc.fontSize(10)
-           .fillColor('#333333')
-           .text(item.label + ': ' + item.value + '%', 260, barY + 3);
-    });
-    
-    yPosition += 100;
-    
-    // Total mentions
-    doc.fontSize(12)
-       .fillColor('#1e3c72')
-       .text('Total Mentions: ' + data.sentiment_analysis.total_mentions, 50, yPosition);
-    
-    yPosition += 40;
-    
-    // Data Sources
-    doc.fontSize(16)
-       .fillColor('#1e3c72')
-       .text('DATA SOURCES', 50, yPosition);
-    
-    yPosition += 25;
-    
-    data.sources.forEach((source, index) => {
-        if (yPosition > 700) {
-            doc.addPage();
-            yPosition = 50;
-        }
+        '<div class="section">' +
+        '  <h2>Executive Summary</h2>' +
+        '  <p>Comprehensive market intelligence analysis for <strong>' + data.query + '</strong> within the ' + data.industry + ' sector. Analysis based on ' + data.sentiment_analysis.total_mentions + ' data points.</p>' +
+        '</div>' +
         
-        doc.fontSize(12)
-           .fillColor('#1e3c72')
-           .text('• ' + source.platform, 50, yPosition);
+        '<div class="section">' +
+        '  <h2>Sentiment Overview</h2>' +
+        '  <div class="metric-grid">' +
+        '    <div class="metric-card">' +
+        '      <div class="metric-value" style="color: #28a745;">' + data.sentiment_analysis.positive_percentage + '%</div>' +
+        '      <div class="metric-label">Positive Sentiment</div>' +
+        '    </div>' +
+        '    <div class="metric-card">' +
+        '      <div class="metric-value" style="color: #ffc107;">' + data.sentiment_analysis.neutral_percentage + '%</div>' +
+        '      <div class="metric-label">Neutral Sentiment</div>' +
+        '    </div>' +
+        '    <div class="metric-card">' +
+        '      <div class="metric-value" style="color: #dc3545;">' + data.sentiment_analysis.negative_percentage + '%</div>' +
+        '      <div class="metric-label">Negative Sentiment</div>' +
+        '    </div>' +
+        '    <div class="metric-card">' +
+        '      <div class="metric-value">' + data.sentiment_analysis.total_mentions + '</div>' +
+        '      <div class="metric-label">Total Mentions</div>' +
+        '    </div>' +
+        '  </div>' +
+        '</div>' +
         
-        yPosition += 15;
+        '<div class="section">' +
+        '  <h2>Data Sources</h2>' +
+        '  <div class="source-grid">' +
+        data.sources.map(source => 
+        '    <div class="source-card">' +
+        '      <div class="source-platform">' + source.platform + '</div>' +
+        '      <div><strong>Data Points:</strong> ' + (source.mentions || source.reviews || source.articles || 'N/A') + '</div>' +
+        '      <div><strong>Sentiment:</strong> ' + (source.sentiment || 'N/A') + '</div>' +
+        '      <div><strong>Themes:</strong> ' + source.key_themes.join(', ') + '</div>' +
+        '      <div style="margin-top: 10px;"><a href="' + source.url + '" target="_blank" style="color: #1e3c72;">View Source</a></div>' +
+        '    </div>'
+        ).join('') +
+        '  </div>' +
+        '</div>' +
         
-        doc.fontSize(10)
-           .fillColor('#333333')
-           .text('   Data Points: ' + (source.mentions || source.reviews || source.articles || 'N/A'), 50, yPosition)
-           .text('   Sentiment: ' + (source.sentiment || 'N/A'), 200, yPosition)
-           .text('   Themes: ' + source.key_themes.join(', '), 50, yPosition + 12, { width: pageWidth });
+        '<div class="section">' +
+        '  <h2>Customer Personas</h2>' +
+        '  <div class="metric-grid">' +
+        '    <div class="metric-card">' +
+        '      <div class="metric-value">40%</div>' +
+        '      <div class="metric-label">' + data.persona_analysis.primary_segment + '</div>' +
+        '    </div>' +
+        '    <div class="metric-card">' +
+        '      <div class="metric-value">35%</div>' +
+        '      <div class="metric-label">' + data.persona_analysis.secondary_segment + '</div>' +
+        '    </div>' +
+        '  </div>' +
+        '</div>' +
         
-        yPosition += 35;
-    });
-    
-    // Customer Personas
-    if (yPosition > 650) {
-        doc.addPage();
-        yPosition = 50;
-    }
-    
-    doc.fontSize(16)
-       .fillColor('#1e3c72')
-       .text('CUSTOMER PERSONAS', 50, yPosition);
-    
-    yPosition += 25;
-    
-    doc.fontSize(11)
-       .fillColor('#333333')
-       .text('• Primary Segment: ' + data.persona_analysis.primary_segment, 50, yPosition)
-       .text('• Secondary Segment: ' + data.persona_analysis.secondary_segment, 50, yPosition + 15);
-    
-    yPosition += 45;
-    
-    // Key Insights
-    doc.fontSize(16)
-       .fillColor('#1e3c72')
-       .text('KEY INSIGHTS', 50, yPosition);
-    
-    yPosition += 25;
-    
-    data.insights.forEach((insight, index) => {
-        if (yPosition > 720) {
-            doc.addPage();
-            yPosition = 50;
-        }
+        '<div class="section">' +
+        '  <h2>Key Insights</h2>' +
+        '  <div class="insights">' +
+        '    <ul>' + data.insights.map(insight => '<li>' + insight + '</li>').join('') + '</ul>' +
+        '  </div>' +
+        '</div>' +
         
-        doc.fontSize(10)
-           .fillColor('#333333')
-           .text('• ' + insight, 50, yPosition, { width: pageWidth });
-        yPosition += 20;
-    });
-    
-    // Strategic Recommendations
-    if (yPosition > 650) {
-        doc.addPage();
-        yPosition = 50;
-    }
-    
-    doc.fontSize(16)
-       .fillColor('#1e3c72')
-       .text('STRATEGIC RECOMMENDATIONS', 50, yPosition);
-    
-    yPosition += 25;
-    
-    data.recommendations.forEach((rec, index) => {
-        if (yPosition > 720) {
-            doc.addPage();
-            yPosition = 50;
-        }
+        '<div class="section">' +
+        '  <h2>Strategic Recommendations</h2>' +
+        data.recommendations.map(rec => 
+        '  <div class="recommendation">' + rec + '</div>'
+        ).join('') +
+        '</div>' +
         
-        // Draw recommendation box
-        doc.rect(50, yPosition - 5, pageWidth, 20)
-           .fillColor('#e8f4f8')
-           .fill();
+        '<div class="footer">' +
+        '  <p><strong>Report ID:</strong> ' + data.report_id + ' | <strong>Generated by:</strong> ' + data.generated_by + '</p>' +
+        '  <p>© InsightEar GPT Enterprise</p>' +
+        '</div>' +
         
-        doc.fontSize(10)
-           .fillColor('#0c5460')
-           .text('→ ' + rec, 55, yPosition, { width: pageWidth - 10 });
-        
-        yPosition += 30;
-    });
-    
-    // Footer
-    doc.fontSize(8)
-       .fillColor('#666666')
-       .text('Generated by InsightEar GPT Enterprise | ' + new Date().toLocaleDateString(), 50, doc.page.height - 50, {
-           align: 'center',
-           width: pageWidth
-       });
+        '</body></html>';
 }
 
-// Helper function to cancel active runs
 async function cancelActiveRuns(threadId) {
     try {
         const runs = await openai.beta.threads.runs.list(threadId);
@@ -1338,7 +1213,6 @@ async function cancelActiveRuns(threadId) {
     }
 }
 
-// Wait for run completion
 async function waitForCompletion(threadId, runId, maxAttempts) {
     const attempts = maxAttempts || 60;
     
@@ -1373,21 +1247,33 @@ async function waitForCompletion(threadId, runId, maxAttempts) {
     return { error: 'Assistant response timeout' };
 }
 
-// Health check
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         assistant_id: ASSISTANT_ID ? 'configured' : 'missing',
-        features: ['file_upload', 'industry_analysis', 'competitive_intelligence', 'enhanced_ui']
+        features: ['file_upload', 'industry_analysis', 'competitive_intelligence'],
+        memory_usage: process.memoryUsage(),
+        uptime: process.uptime()
     });
 });
 
-// Start server
-app.listen(port, () => {
-    console.log('🚀 InsightEar GPT Enhanced server running on port ' + port);
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
+const server = app.listen(port, '0.0.0.0', () => {
+    console.log('🚀 InsightEar GPT Clean server running on port ' + port);
     console.log('📱 Widget URL: http://localhost:' + port);
     console.log('🤖 Assistant ID: ' + (ASSISTANT_ID || 'NOT SET'));
-    console.log('✨ Features: File Upload, Industry Analysis, Competitive Intelligence');
+    console.log('✨ Features: File Upload, Industry Analysis, Clean UI');
     console.log('✅ Ready for enterprise market intelligence!');
+});
+
+process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+    });
 });
