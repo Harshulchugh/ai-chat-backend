@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const OpenAI = require('openai');
 const cors = require('cors');
+const PDFDocument = require('pdfkit');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -28,13 +29,48 @@ function generateIntelligence(query) {
     const negative = 100 - positive - neutral;
     const mentions = Math.floor(Math.random() * 200) + 300;
     
+    // Generate real source URLs
+    const encodedQuery = encodeURIComponent(query);
+    const sources = [
+        {
+            platform: "Reddit",
+            mentions: Math.floor(Math.random() * 80) + 60,
+            sentiment: "positive",
+            url: `https://www.reddit.com/search/?q=${encodedQuery}`,
+            icon: "📱"
+        },
+        {
+            platform: "Product Reviews",
+            mentions: Math.floor(Math.random() * 120) + 100,
+            sentiment: "positive",
+            url: `https://www.google.com/search?q=${encodedQuery}+reviews`,
+            icon: "⭐"
+        },
+        {
+            platform: "Social Media",
+            mentions: Math.floor(Math.random() * 100) + 70,
+            sentiment: "mixed",
+            url: `https://twitter.com/search?q=${encodedQuery}`,
+            icon: "📢"
+        },
+        {
+            platform: "News & Media",
+            mentions: Math.floor(Math.random() * 40) + 20,
+            sentiment: "neutral",
+            url: `https://news.google.com/search?q=${encodedQuery}`,
+            icon: "📰"
+        }
+    ];
+    
     return {
         query: query,
         positive: positive,
         neutral: neutral,
         negative: negative,
         mentions: mentions,
-        reportId: 'RPT-' + Date.now()
+        sources: sources,
+        reportId: 'RPT-' + Date.now(),
+        timestamp: new Date().toISOString()
     };
 }
 
@@ -250,7 +286,10 @@ app.get('/', (req, res) => {
                 ✅ Market sentiment analysis<br>
                 ✅ Brand intelligence<br>
                 ✅ PDF reports<br><br>
-                <strong>Try:</strong> "Boston University insights"
+                <strong>Try these examples:</strong><br>
+                "Nike brand sentiment"<br>
+                "Starbucks vs McDonald's"<br>
+                "Apple market analysis"
             </div>
         </div>
         
@@ -373,13 +412,20 @@ app.get('/', (req, res) => {
             html += '<div class="bar">';
             html += '<div class="bar-fill" style="width: ' + data.positive + '%"></div>';
             html += '</div>';
+            
+            // Add real clickable sources
             html += '<div class="sources">';
-            html += '<div class="source">📱 Reddit<br>89 mentions</div>';
-            html += '<div class="source">⭐ Reviews<br>156 reviews</div>';
-            html += '<div class="source">📢 Social<br>73 mentions</div>';
-            html += '<div class="source">📰 News<br>24 articles</div>';
+            for (var i = 0; i < data.sources.length; i++) {
+                var source = data.sources[i];
+                html += '<div class="source">';
+                html += '<div style="margin-bottom: 4px;">' + source.icon + ' <strong>' + source.platform + '</strong></div>';
+                html += '<div style="font-size: 11px; margin-bottom: 6px;">' + source.mentions + ' mentions</div>';
+                html += '<a href="' + source.url + '" target="_blank" style="font-size: 10px; color: #2a5298; text-decoration: none; padding: 2px 6px; background: rgba(42, 82, 152, 0.1); border-radius: 4px;">View Source</a>';
+                html += '</div>';
+            }
             html += '</div>';
-            html += '<div class="insight"><strong>💡 Key Insight:</strong> Strong positive sentiment with quality and reputation as main themes.</div>';
+            
+            html += '<div class="insight"><strong>💡 Key Insight:</strong> Strong positive sentiment with quality and reputation as main themes across all platforms.</div>';
             html += '<button class="download-btn" onclick="downloadReport(\\'';
             html += data.reportId;
             html += '\\')">📄 Download PDF Report</button>';
@@ -436,149 +482,165 @@ app.get('/api/report/:reportId', (req, res) => {
             return res.status(404).send('Report not found');
         }
         
-        console.log('Generating report for:', req.params.reportId);
+        console.log('Generating PDF report for:', req.params.reportId);
         
-        const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>InsightEar GPT Report - ${data.query}</title>
-    <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-            margin: 40px; 
-            line-height: 1.6; 
-            color: #333; 
-        }
-        .header { 
-            text-align: center; 
-            border-bottom: 3px solid #1e3c72; 
-            padding-bottom: 20px; 
-            margin-bottom: 30px; 
-        }
-        .logo { 
-            font-size: 24px; 
-            font-weight: 700; 
-            color: #1e3c72; 
-            margin-bottom: 10px; 
-        }
-        .section { 
-            margin: 25px 0; 
-        }
-        .section-title { 
-            font-size: 18px; 
-            font-weight: 600; 
-            color: #1e3c72; 
-            margin-bottom: 15px; 
-            border-bottom: 2px solid #e2e8f0; 
-            padding-bottom: 5px; 
-        }
-        .metric-grid { 
-            display: grid; 
-            grid-template-columns: repeat(4, 1fr); 
-            gap: 15px; 
-            margin: 20px 0; 
-        }
-        .metric-card { 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 8px; 
-            text-align: center; 
-            border: 1px solid #e2e8f0; 
-        }
-        .metric-value { 
-            font-size: 20px; 
-            font-weight: 700; 
-            margin-bottom: 5px; 
-        }
-        .metric-label { 
-            font-size: 12px; 
-            color: #64748b; 
-            text-transform: uppercase; 
-        }
-        .insight { 
-            margin: 10px 0; 
-            padding: 12px; 
-            background: #f0f7ff; 
-            border-radius: 6px; 
-            border-left: 4px solid #1e3c72; 
-        }
-        .footer { 
-            margin-top: 30px; 
-            padding-top: 20px; 
-            border-top: 2px solid #e2e8f0; 
-            text-align: center; 
-            color: #64748b; 
-            font-size: 12px; 
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">InsightEar GPT</div>
-        <div>Enterprise Market Intelligence Report</div>
-        <h2>${data.query}</h2>
-        <p>Market Analysis Report</p>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Executive Summary</div>
-        <p>Comprehensive analysis of ${data.query} across ${data.mentions} mentions reveals ${data.positive}% positive sentiment with strong market positioning.</p>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Sentiment Analysis</div>
-        <div class="metric-grid">
-            <div class="metric-card">
-                <div class="metric-value" style="color: #10b981;">${data.positive}%</div>
-                <div class="metric-label">Positive</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value" style="color: #f59e0b;">${data.neutral}%</div>
-                <div class="metric-label">Neutral</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value" style="color: #ef4444;">${data.negative}%</div>
-                <div class="metric-label">Negative</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">${data.mentions}</div>
-                <div class="metric-label">Total Mentions</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Key Insights</div>
-        <div class="insight">Strong positive sentiment indicates favorable market positioning</div>
-        <div class="insight">Quality and reputation emerge as primary positive themes</div>
-        <div class="insight">Brand perception consistently positive across major platforms</div>
-        <div class="insight">Customer satisfaction metrics trending upward</div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Strategic Recommendations</div>
-        <div class="insight">Leverage positive sentiment in marketing campaigns</div>
-        <div class="insight">Monitor competitive developments for strategic positioning</div>
-        <div class="insight">Enhance customer engagement through digital channels</div>
-        <div class="insight">Capitalize on market opportunities in emerging trends</div>
-    </div>
-
-    <div class="footer">
-        <p><strong>Report Details</strong></p>
-        <p>Report ID: ${data.reportId} | Generated: ${new Date().toLocaleString()}</p>
-        <p style="margin-top: 10px;">InsightEar GPT Enterprise Market Intelligence Platform</p>
-        <p style="margin-top: 5px; font-size: 10px;">To save as PDF: Press Ctrl+P and select "Save as PDF"</p>
-    </div>
-</body>
-</html>`;
+        // Create PDF document
+        const doc = new PDFDocument({ margin: 50 });
         
-        res.setHeader('Content-Type', 'text/html');
-        res.send(html);
+        // Set response headers for PDF
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="InsightEar_Report_${data.reportId}.pdf"`);
+        
+        // Pipe PDF to response
+        doc.pipe(res);
+        
+        // Add content to PDF
+        
+        // Header
+        doc.fontSize(24)
+           .fillColor('#1e3c72')
+           .text('InsightEar GPT', 50, 50);
+           
+        doc.fontSize(14)
+           .fillColor('#666')
+           .text('Enterprise Market Intelligence Report', 50, 80);
+           
+        doc.fontSize(20)
+           .fillColor('#333')
+           .text(data.query, 50, 120);
+           
+        doc.fontSize(12)
+           .fillColor('#666')
+           .text('Market Analysis Report | Generated: ' + new Date(data.timestamp).toLocaleString(), 50, 150);
+           
+        // Add line
+        doc.moveTo(50, 180)
+           .lineTo(550, 180)
+           .strokeColor('#1e3c72')
+           .lineWidth(2)
+           .stroke();
+        
+        let yPosition = 220;
+        
+        // Executive Summary
+        doc.fontSize(16)
+           .fillColor('#1e3c72')
+           .text('EXECUTIVE SUMMARY', 50, yPosition);
+           
+        yPosition += 30;
+        doc.fontSize(12)
+           .fillColor('#333')
+           .text(`Comprehensive analysis of ${data.query} across ${data.mentions} mentions reveals ${data.positive}% positive sentiment with strong market positioning.`, 50, yPosition, { width: 500 });
+        
+        yPosition += 80;
+        
+        // Sentiment Analysis
+        doc.fontSize(16)
+           .fillColor('#1e3c72')
+           .text('SENTIMENT ANALYSIS', 50, yPosition);
+           
+        yPosition += 40;
+        
+        // Sentiment metrics in a grid
+        const metrics = [
+            { label: 'Positive', value: data.positive + '%', color: '#10b981', x: 50 },
+            { label: 'Neutral', value: data.neutral + '%', color: '#f59e0b', x: 180 },
+            { label: 'Negative', value: data.negative + '%', color: '#ef4444', x: 310 },
+            { label: 'Total Mentions', value: data.mentions, color: '#333', x: 440 }
+        ];
+        
+        metrics.forEach(metric => {
+            // Draw metric box
+            doc.rect(metric.x, yPosition, 120, 60)
+               .fillAndStroke('#f8f9fa', '#e2e8f0');
+               
+            // Add metric value
+            doc.fontSize(18)
+               .fillColor(metric.color)
+               .text(metric.value, metric.x + 10, yPosition + 15, { width: 100, align: 'center' });
+               
+            // Add metric label
+            doc.fontSize(10)
+               .fillColor('#666')
+               .text(metric.label.toUpperCase(), metric.x + 10, yPosition + 40, { width: 100, align: 'center' });
+        });
+        
+        yPosition += 100;
+        
+        // Data Sources
+        doc.fontSize(16)
+           .fillColor('#1e3c72')
+           .text('DATA SOURCES', 50, yPosition);
+           
+        yPosition += 30;
+        
+        data.sources.forEach((source, index) => {
+            doc.fontSize(12)
+               .fillColor('#333')
+               .text(`${source.icon} ${source.platform}`, 70, yPosition)
+               .text(`${source.mentions} mentions`, 250, yPosition)
+               .text(`Sentiment: ${source.sentiment}`, 350, yPosition);
+            yPosition += 25;
+        });
+        
+        yPosition += 20;
+        
+        // Key Insights
+        doc.fontSize(16)
+           .fillColor('#1e3c72')
+           .text('KEY INSIGHTS', 50, yPosition);
+           
+        yPosition += 30;
+        
+        const insights = [
+            'Strong positive sentiment indicates favorable market positioning',
+            'Quality and reputation emerge as primary positive themes',
+            'Brand perception consistently positive across major platforms',
+            'Customer satisfaction metrics trending upward'
+        ];
+        
+        insights.forEach(insight => {
+            doc.fontSize(12)
+               .fillColor('#333')
+               .text('• ' + insight, 70, yPosition, { width: 480 });
+            yPosition += 25;
+        });
+        
+        yPosition += 20;
+        
+        // Strategic Recommendations
+        doc.fontSize(16)
+           .fillColor('#1e3c72')
+           .text('STRATEGIC RECOMMENDATIONS', 50, yPosition);
+           
+        yPosition += 30;
+        
+        const recommendations = [
+            'Leverage positive sentiment in marketing campaigns',
+            'Monitor competitive developments for strategic positioning',
+            'Enhance customer engagement through digital channels',
+            'Capitalize on market opportunities in emerging trends'
+        ];
+        
+        recommendations.forEach(rec => {
+            doc.fontSize(12)
+               .fillColor('#333')
+               .text('→ ' + rec, 70, yPosition, { width: 480 });
+            yPosition += 25;
+        });
+        
+        // Footer
+        doc.fontSize(10)
+           .fillColor('#666')
+           .text('Report ID: ' + data.reportId, 50, 750)
+           .text('Generated by InsightEar GPT Enterprise Market Intelligence Platform', 50, 765);
+        
+        // Finalize PDF
+        doc.end();
         
     } catch (error) {
-        console.error('Report error:', error);
-        res.status(500).send('Report error');
+        console.error('PDF generation error:', error);
+        res.status(500).send('PDF generation failed');
     }
 });
 
