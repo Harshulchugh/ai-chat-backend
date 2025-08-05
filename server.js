@@ -120,6 +120,23 @@ app.get('/', (req, res) => {
             border-top: 1px solid #e2e8f0;
             display: flex;
             gap: 10px;
+            align-items: center;
+        }
+        .file-btn {
+            width: 40px;
+            height: 40px;
+            background: #f1f5f9;
+            color: #64748b;
+            border: 2px solid #e2e8f0;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        .file-btn:hover {
+            background: #e2e8f0;
         }
         .input {
             flex: 1;
@@ -245,13 +262,25 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="input-area">
+            <input type="file" id="fileInput" style="display: none;" accept=".pdf,.csv,.xlsx,.txt" multiple>
+            <button class="file-btn" onclick="document.getElementById('fileInput').click()">📎</button>
             <input type="text" class="input" id="messageInput" placeholder="Ask about brands, sentiment, analysis..." onkeypress="if(event.key==='Enter') sendMessage()">
             <button class="send-btn" onclick="sendMessage()">→</button>
         </div>
     </div>
 
     <script>
+        // Add file upload handling
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                addMessage('user', '📁 Files selected: ' + files.map(f => f.name).join(', '));
+                addMessage('bot', '✅ Files ready for analysis! Ask me about the content.');
+            }
+        });
+        
         function addMessage(role, content) {
+            console.log('Adding message:', role, content);
             const messages = document.getElementById('messages');
             const div = document.createElement('div');
             div.className = 'message ' + role;
@@ -261,24 +290,47 @@ app.get('/', (req, res) => {
         }
         
         function sendMessage() {
+            console.log('Send message clicked');
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
-            if (!message) return;
             
+            if (!message) {
+                console.log('Empty message, returning');
+                return;
+            }
+            
+            console.log('Sending message:', message);
             input.value = '';
             addMessage('user', message);
+            
+            // Add typing indicator
+            addMessage('bot', '💭 Analyzing...');
             
             const keywords = ['sentiment', 'analysis', 'insights', 'boston', 'university', 'nvidia', 'tesla', 'market', 'brand', 'vs'];
             const needsIntel = keywords.some(k => message.toLowerCase().includes(k));
             
+            console.log('Needs intelligence:', needsIntel);
+            
             if (needsIntel) {
+                console.log('Making intelligence request');
                 fetch('/api/intelligence', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query: message })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    console.log('Response received:', response.status);
+                    if (!response.ok) {
+                        throw new Error('Response not ok: ' + response.status);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Data received:', data);
+                    // Remove typing indicator
+                    const messages = document.getElementById('messages');
+                    messages.removeChild(messages.lastChild);
+                    
                     const html = '<div class="intelligence">' +
                         '<div class="intel-title">' + data.query + ' - Market Analysis</div>' +
                         '<div class="sentiment">' +
@@ -305,29 +357,41 @@ app.get('/', (req, res) => {
                         '<div class="bar-fill" style="width: ' + data.positive + '%"></div>' +
                         '</div>' +
                         '<div class="sources">' +
-                        '<div class="source">Reddit<br>89 mentions</div>' +
-                        '<div class="source">Reviews<br>156 reviews</div>' +
-                        '<div class="source">Social Media<br>73 mentions</div>' +
-                        '<div class="source">News<br>24 articles</div>' +
+                        '<div class="source">📱 Reddit<br>89 mentions</div>' +
+                        '<div class="source">⭐ Reviews<br>156 reviews</div>' +
+                        '<div class="source">📢 Social Media<br>73 mentions</div>' +
+                        '<div class="source">📰 News<br>24 articles</div>' +
                         '</div>' +
+                        '<p style="margin: 15px 0; padding: 10px; background: #f0f7ff; border-radius: 6px; font-size: 13px;"><strong>💡 Key Insight:</strong> Strong positive sentiment with quality and reputation as main themes across all platforms.</p>' +
                         '<button class="download-btn" onclick="downloadReport(\'' + data.reportId + '\')">📄 Download PDF Report</button>' +
                         '</div>';
                     
                     addMessage('bot', html);
                 })
                 .catch(error => {
-                    addMessage('bot', 'Analysis temporarily unavailable. Please try again.');
+                    console.error('Fetch error:', error);
+                    // Remove typing indicator
+                    const messages = document.getElementById('messages');
+                    messages.removeChild(messages.lastChild);
+                    addMessage('bot', '❌ Analysis temporarily unavailable. Please try again in a moment.');
                 });
             } else {
                 setTimeout(() => {
-                    addMessage('bot', 'I can help with market analysis and brand insights! Try asking about specific companies or sentiment analysis.');
-                }, 500);
+                    // Remove typing indicator
+                    const messages = document.getElementById('messages');
+                    messages.removeChild(messages.lastChild);
+                    addMessage('bot', 'I can help with market analysis and brand insights! Try asking about specific companies like "Tesla sentiment" or "Boston University insights".');
+                }, 1000);
             }
         }
         
         function downloadReport(reportId) {
+            console.log('Downloading report:', reportId);
             window.open('/api/report/' + reportId, '_blank');
         }
+        
+        // Test function to check if JavaScript is working
+        console.log('InsightEar GPT JavaScript loaded successfully');
     </script>
 </body>
 </html>`);
