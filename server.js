@@ -3,6 +3,7 @@ const multer = require('multer');
 const OpenAI = require('openai');
 const cors = require('cors');
 const fs = require('fs');
+const PDFDocument = require('pdfkit');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -98,7 +99,8 @@ function generateEnhancedIntelligence(query, industry) {
                 reviews: Math.floor(Math.random() * 200) + 100,
                 average_rating: (Math.random() * 1.5 + 3.5).toFixed(1),
                 key_themes: ["good value", "quality product", "customer satisfaction"],
-                verified_purchases: 85
+                verified_purchases: 85,
+                sentiment: "positive"
             },
             {
                 platform: "Social Media",
@@ -1050,27 +1052,16 @@ app.post('/api/chat/message', async (req, res) => {
             reports.set(intelligenceData.report_id, intelligenceData);
         }
 
-        // Create enhanced message content
-        let content = [{ type: "text", text: safeMessage }];
-        
-        // Add intelligence data to message
-        if (intelligenceData) {
-            const intelligenceText = '\n\n[ENHANCED MARKET INTELLIGENCE DATA]\n' + JSON.stringify(intelligenceData, null, 2);
-            content[0].text += intelligenceText;
-        }
-        
         // Prepare message with proper file attachments
         const messageData = {
             role: "user",
-            content: content
+            content: safeMessage + (intelligenceData ? '\n\n[ENHANCED MARKET INTELLIGENCE DATA]\n' + JSON.stringify(intelligenceData, null, 2) : '')
         };
         
-        // Add file attachments using the correct OpenAI format
+        // Add file attachments using the correct OpenAI format if files exist
         if (fileIds.length > 0) {
-            messageData.attachments = fileIds.map(fileId => ({
-                file_id: fileId,
-                tools: [{ type: "file_search" }]
-            }));
+            // Add file info to the message text instead of attachments
+            messageData.content += '\n\n[FILE ANALYSIS REQUEST]\nFiles uploaded for analysis: ' + fileIds.length + ' file(s)\nFile IDs: ' + fileIds.join(', ');
         }
 
         // Send to assistant
@@ -1100,7 +1091,7 @@ app.post('/api/chat/message', async (req, res) => {
     }
 });
 
-// Simple PDF Report generation endpoint
+// Real PDF Report generation endpoint
 app.get('/api/reports/:reportId/download', async (req, res) => {
     try {
         const reportId = req.params.reportId;
@@ -1110,23 +1101,215 @@ app.get('/api/reports/:reportId/download', async (req, res) => {
             return res.status(404).json({ error: 'Report not found' });
         }
 
-        // Generate simple HTML for PDF
-        const htmlContent = generateSimplePDFHTML(reportData);
+        // Create PDF document
+        const doc = new PDFDocument({ margin: 50 });
         
-        // Set headers for PDF download
-        res.setHeader('Content-Type', 'text/html');
-        res.setHeader('Content-Disposition', 'attachment; filename="InsightEar-Report-' + reportId + '.html"');
-        res.send(htmlContent);
+        // Set response headers for PDF download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="InsightEar-Report-' + reportId + '.pdf"');
+        
+        // Pipe the PDF to response
+        doc.pipe(res);
+        
+        // Generate professional PDF content
+        generateProfessionalPDF(doc, reportData);
+        
+        // Finalize the PDF
+        doc.end();
 
     } catch (error) {
-        console.error('Report download error:', error);
-        res.status(500).json({ error: 'Failed to download report' });
+        console.error('PDF generation error:', error);
+        res.status(500).json({ error: 'Failed to generate PDF report' });
     }
 });
 
-// Generate simple PDF HTML
-function generateSimplePDFHTML(data) {
-    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>InsightEar GPT Report</title><style>body{font-family:Arial,sans-serif;margin:40px;color:#333;line-height:1.6}.header{text-align:center;border-bottom:3px solid #1e3c72;padding-bottom:20px;margin-bottom:30px}.logo{font-size:28px;font-weight:bold;color:#1e3c72;margin-bottom:10px}.section{margin:25px 0;page-break-inside:avoid}.section h2{color:#1e3c72;border-left:4px solid #2a5298;padding-left:15px}.metric{background:#f8f9fa;padding:15px;margin:10px 0;border-radius:8px;border-left:4px solid #2a5298}.source{background:#fff;border:1px solid #e0e0e0;padding:15px;margin:10px 0;border-radius:8px}.recommendation{background:#e8f4f8;border-left:4px solid #17a2b8;padding:15px;margin:10px 0}</style></head><body><div class="header"><div class="logo">📊 InsightEar GPT</div><div>Enterprise Market Intelligence Report</div><div style="margin-top:15px;font-size:14px;"><strong>Analysis:</strong> ' + data.query + '<br><strong>Industry:</strong> ' + data.industry + '<br><strong>Generated:</strong> ' + new Date(data.timestamp).toLocaleDateString() + '</div></div><div class="section"><h2>📋 Executive Summary</h2><p>Comprehensive market intelligence analysis for <strong>' + data.query + '</strong> within the ' + data.industry + ' sector.</p></div><div class="section"><h2>📊 Sentiment Overview</h2><div class="metric"><strong>Positive:</strong> ' + data.sentiment_analysis.positive_percentage + '%</div><div class="metric"><strong>Neutral:</strong> ' + data.sentiment_analysis.neutral_percentage + '%</div><div class="metric"><strong>Negative:</strong> ' + data.sentiment_analysis.negative_percentage + '%</div><div class="metric"><strong>Total Mentions:</strong> ' + data.sentiment_analysis.total_mentions + '</div></div><div class="section"><h2>🌐 Data Sources</h2>' + data.sources.map(source => '<div class="source"><h4>' + source.platform + '</h4><p><strong>Data Points:</strong> ' + (source.mentions || source.reviews || source.articles || 'N/A') + '</p><p><strong>URL:</strong> <a href="' + source.url + '">' + source.url + '</a></p></div>').join('') + '</div><div class="section"><h2>💡 Key Insights</h2><ul>' + data.insights.map(insight => '<li>' + insight + '</li>').join('') + '</ul></div><div class="section"><h2>🚀 Recommendations</h2>' + data.recommendations.map(rec => '<div class="recommendation">' + rec + '</div>').join('') + '</div><div style="margin-top:40px;text-align:center;font-size:12px;color:#666;border-top:1px solid #e0e0e0;padding-top:20px;"><p><strong>Report ID:</strong> ' + data.report_id + ' | <strong>Generated by:</strong> ' + data.generated_by + '</p></div></body></html>';
+// Generate professional PDF with charts and formatting
+function generateProfessionalPDF(doc, data) {
+    const pageWidth = doc.page.width - 100; // Account for margins
+    
+    // Header with branding
+    doc.fontSize(24)
+       .fillColor('#1e3c72')
+       .text('📊 InsightEar GPT', 50, 50)
+       .fontSize(16)
+       .fillColor('#666666')
+       .text('Enterprise Market Intelligence Report', 50, 80);
+    
+    // Query and metadata
+    doc.fontSize(12)
+       .fillColor('#333333')
+       .text('Analysis: ' + data.query, 50, 110)
+       .text('Industry: ' + data.industry, 50, 125)
+       .text('Generated: ' + new Date(data.timestamp).toLocaleDateString(), 50, 140)
+       .text('Report ID: ' + data.report_id, 50, 155);
+    
+    // Draw line
+    doc.moveTo(50, 180)
+       .lineTo(pageWidth + 50, 180)
+       .strokeColor('#1e3c72')
+       .lineWidth(2)
+       .stroke();
+    
+    let yPosition = 200;
+    
+    // Executive Summary
+    doc.fontSize(16)
+       .fillColor('#1e3c72')
+       .text('📋 Executive Summary', 50, yPosition);
+    
+    yPosition += 25;
+    doc.fontSize(11)
+       .fillColor('#333333')
+       .text('Comprehensive analysis of ' + data.query + ' across ' + data.sentiment_analysis.total_mentions + ' mentions', 50, yPosition, { width: pageWidth });
+    
+    yPosition += 40;
+    
+    // Sentiment Overview with visual bars
+    doc.fontSize(16)
+       .fillColor('#1e3c72')
+       .text('📊 Sentiment Overview', 50, yPosition);
+    
+    yPosition += 30;
+    
+    // Draw sentiment bars
+    const sentimentData = [
+        { label: 'Positive', value: data.sentiment_analysis.positive_percentage, color: '#28a745' },
+        { label: 'Neutral', value: data.sentiment_analysis.neutral_percentage, color: '#ffc107' },
+        { label: 'Negative', value: data.sentiment_analysis.negative_percentage, color: '#dc3545' }
+    ];
+    
+    sentimentData.forEach((item, index) => {
+        const barY = yPosition + (index * 25);
+        const barWidth = (item.value / 100) * 200;
+        
+        // Draw bar background
+        doc.rect(50, barY, 200, 15)
+           .fillColor('#f0f0f0')
+           .fill();
+        
+        // Draw filled bar
+        doc.rect(50, barY, barWidth, 15)
+           .fillColor(item.color)
+           .fill();
+        
+        // Add label and percentage
+        doc.fontSize(10)
+           .fillColor('#333333')
+           .text(item.label + ': ' + item.value + '%', 260, barY + 3);
+    });
+    
+    yPosition += 100;
+    
+    // Total mentions
+    doc.fontSize(12)
+       .fillColor('#1e3c72')
+       .text('Total Mentions: ' + data.sentiment_analysis.total_mentions, 50, yPosition);
+    
+    yPosition += 40;
+    
+    // Data Sources
+    doc.fontSize(16)
+       .fillColor('#1e3c72')
+       .text('🌐 Data Sources', 50, yPosition);
+    
+    yPosition += 25;
+    
+    data.sources.forEach((source, index) => {
+        if (yPosition > 700) {
+            doc.addPage();
+            yPosition = 50;
+        }
+        
+        doc.fontSize(12)
+           .fillColor('#1e3c72')
+           .text('• ' + source.platform, 50, yPosition);
+        
+        yPosition += 15;
+        
+        doc.fontSize(10)
+           .fillColor('#333333')
+           .text('   Data Points: ' + (source.mentions || source.reviews || source.articles || 'N/A'), 50, yPosition)
+           .text('   Sentiment: ' + (source.sentiment || 'N/A'), 200, yPosition)
+           .text('   Themes: ' + source.key_themes.join(', '), 50, yPosition + 12, { width: pageWidth });
+        
+        yPosition += 35;
+    });
+    
+    // Customer Personas
+    if (yPosition > 650) {
+        doc.addPage();
+        yPosition = 50;
+    }
+    
+    doc.fontSize(16)
+       .fillColor('#1e3c72')
+       .text('👥 Customer Personas', 50, yPosition);
+    
+    yPosition += 25;
+    
+    doc.fontSize(11)
+       .fillColor('#333333')
+       .text('• Primary Segment: ' + data.persona_analysis.primary_segment, 50, yPosition)
+       .text('• Secondary Segment: ' + data.persona_analysis.secondary_segment, 50, yPosition + 15);
+    
+    yPosition += 45;
+    
+    // Key Insights
+    doc.fontSize(16)
+       .fillColor('#1e3c72')
+       .text('💡 Key Insights', 50, yPosition);
+    
+    yPosition += 25;
+    
+    data.insights.forEach((insight, index) => {
+        if (yPosition > 720) {
+            doc.addPage();
+            yPosition = 50;
+        }
+        
+        doc.fontSize(10)
+           .fillColor('#333333')
+           .text('• ' + insight, 50, yPosition, { width: pageWidth });
+        yPosition += 20;
+    });
+    
+    // Strategic Recommendations
+    if (yPosition > 650) {
+        doc.addPage();
+        yPosition = 50;
+    }
+    
+    doc.fontSize(16)
+       .fillColor('#1e3c72')
+       .text('🚀 Strategic Recommendations', 50, yPosition);
+    
+    yPosition += 25;
+    
+    data.recommendations.forEach((rec, index) => {
+        if (yPosition > 720) {
+            doc.addPage();
+            yPosition = 50;
+        }
+        
+        // Draw recommendation box
+        doc.rect(50, yPosition - 5, pageWidth, 20)
+           .fillColor('#e8f4f8')
+           .fill();
+        
+        doc.fontSize(10)
+           .fillColor('#0c5460')
+           .text('→ ' + rec, 55, yPosition, { width: pageWidth - 10 });
+        
+        yPosition += 30;
+    });
+    
+    // Footer
+    doc.fontSize(8)
+       .fillColor('#666666')
+       .text('Generated by InsightEar GPT Enterprise | ' + new Date().toLocaleDateString(), 50, doc.page.height - 50, {
+           align: 'center',
+           width: pageWidth
+       });
 }
 
 // Helper function to cancel active runs
