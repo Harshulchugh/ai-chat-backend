@@ -67,7 +67,7 @@ function generateEnhancedIntelligence(query, industry) {
     
     const positivePercent = Math.floor(Math.random() * 20) + 60; // 60-80%
     const neutralPercent = Math.floor(Math.random() * 15) + 15;  // 15-30%
-    const negativePercent = 100 - positivePercent - neutralPercent;
+    const negativePercent = Math.max(1, 100 - positivePercent - neutralPercent); // Ensure positive number
     
     const intelligence = {
         query: query,
@@ -1155,7 +1155,7 @@ function generateProfessionalPDF(doc, data) {
     // Executive Summary
     doc.fontSize(16)
        .fillColor('#1e3c72')
-       .text('📋 Executive Summary', 50, yPosition);
+       .text('EXECUTIVE SUMMARY', 50, yPosition);
     
     yPosition += 25;
     doc.fontSize(11)
@@ -1167,7 +1167,7 @@ function generateProfessionalPDF(doc, data) {
     // Sentiment Overview with visual bars
     doc.fontSize(16)
        .fillColor('#1e3c72')
-       .text('📊 Sentiment Overview', 50, yPosition);
+       .text('SENTIMENT OVERVIEW', 50, yPosition);
     
     yPosition += 30;
     
@@ -1210,7 +1210,7 @@ function generateProfessionalPDF(doc, data) {
     // Data Sources
     doc.fontSize(16)
        .fillColor('#1e3c72')
-       .text('🌐 Data Sources', 50, yPosition);
+       .text('DATA SOURCES', 50, yPosition);
     
     yPosition += 25;
     
@@ -1243,7 +1243,7 @@ function generateProfessionalPDF(doc, data) {
     
     doc.fontSize(16)
        .fillColor('#1e3c72')
-       .text('👥 Customer Personas', 50, yPosition);
+       .text('CUSTOMER PERSONAS', 50, yPosition);
     
     yPosition += 25;
     
@@ -1257,7 +1257,7 @@ function generateProfessionalPDF(doc, data) {
     // Key Insights
     doc.fontSize(16)
        .fillColor('#1e3c72')
-       .text('💡 Key Insights', 50, yPosition);
+       .text('KEY INSIGHTS', 50, yPosition);
     
     yPosition += 25;
     
@@ -1281,7 +1281,7 @@ function generateProfessionalPDF(doc, data) {
     
     doc.fontSize(16)
        .fillColor('#1e3c72')
-       .text('🚀 Strategic Recommendations', 50, yPosition);
+       .text('STRATEGIC RECOMMENDATIONS', 50, yPosition);
     
     yPosition += 25;
     
