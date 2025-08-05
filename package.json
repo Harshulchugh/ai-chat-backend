@@ -12,7 +12,12 @@
     "cors": "^2.8.5",
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
-    "sentiment": "^5.0.2"
+    "sentiment": "^5.0.2",
+    "puppeteer": "^21.0.0",
+    "jspdf": "^2.5.1",
+    "canvas": "^2.11.2",
+    "chart.js": "^4.4.0",
+    "chartjs-node-canvas": "^4.1.6"
   },
   "engines": {
     "node": ">=16.0.0"
