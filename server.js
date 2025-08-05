@@ -242,6 +242,14 @@ app.get('/', (req, res) => {
         .download-btn:hover {
             background: #2a5298;
         }
+        .insight {
+            background: #f0f7ff;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 13px;
+            border-left: 4px solid #1e3c72;
+        }
     </style>
 </head>
 <body>
@@ -263,24 +271,39 @@ app.get('/', (req, res) => {
         
         <div class="input-area">
             <input type="file" id="fileInput" style="display: none;" accept=".pdf,.csv,.xlsx,.txt" multiple>
-            <button class="file-btn" onclick="document.getElementById('fileInput').click()">📎</button>
-            <input type="text" class="input" id="messageInput" placeholder="Ask about brands, sentiment, analysis..." onkeypress="if(event.key==='Enter') sendMessage()">
-            <button class="send-btn" onclick="sendMessage()">→</button>
+            <button class="file-btn" id="fileBtn">📎</button>
+            <input type="text" class="input" id="messageInput" placeholder="Ask about brands, sentiment, analysis...">
+            <button class="send-btn" id="sendBtn">→</button>
         </div>
     </div>
 
     <script>
-        // Add file upload handling
+        console.log('InsightEar GPT starting...');
+        
+        // File upload handling
+        document.getElementById('fileBtn').addEventListener('click', function() {
+            document.getElementById('fileInput').click();
+        });
+        
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const files = Array.from(e.target.files);
             if (files.length > 0) {
-                addMessage('user', '📁 Files selected: ' + files.map(f => f.name).join(', '));
-                addMessage('bot', '✅ Files ready for analysis! Ask me about the content.');
+                addMessage('user', '📁 Files: ' + files.map(f => f.name).join(', '));
+                addMessage('bot', '✅ Files ready for analysis!');
             }
         });
         
+        // Message input handling
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        document.getElementById('sendBtn').addEventListener('click', sendMessage);
+        
         function addMessage(role, content) {
-            console.log('Adding message:', role, content);
+            console.log('Adding message:', role);
             const messages = document.getElementById('messages');
             const div = document.createElement('div');
             div.className = 'message ' + role;
@@ -290,26 +313,22 @@ app.get('/', (req, res) => {
         }
         
         function sendMessage() {
-            console.log('Send message clicked');
+            console.log('sendMessage called');
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
             if (!message) {
-                console.log('Empty message, returning');
+                console.log('Empty message');
                 return;
             }
             
-            console.log('Sending message:', message);
+            console.log('Sending:', message);
             input.value = '';
             addMessage('user', message);
-            
-            // Add typing indicator
             addMessage('bot', '💭 Analyzing...');
             
             const keywords = ['sentiment', 'analysis', 'insights', 'boston', 'university', 'nvidia', 'tesla', 'market', 'brand', 'vs'];
             const needsIntel = keywords.some(k => message.toLowerCase().includes(k));
-            
-            console.log('Needs intelligence:', needsIntel);
             
             if (needsIntel) {
                 console.log('Making intelligence request');
@@ -319,70 +338,69 @@ app.get('/', (req, res) => {
                     body: JSON.stringify({ query: message })
                 })
                 .then(response => {
-                    console.log('Response received:', response.status);
-                    if (!response.ok) {
-                        throw new Error('Response not ok: ' + response.status);
-                    }
+                    console.log('Response status:', response.status);
                     return response.json();
                 })
                 .then(data => {
                     console.log('Data received:', data);
-                    // Remove typing indicator
+                    // Remove loading message
                     const messages = document.getElementById('messages');
                     messages.removeChild(messages.lastChild);
                     
-                    const html = '<div class="intelligence">' +
-                        '<div class="intel-title">' + data.query + ' - Market Analysis</div>' +
-                        '<div class="sentiment">' +
-                        '<div class="sentiment-card">' +
-                        '<div class="percentage positive">' + data.positive + '%</div>' +
-                        '<div class="label">Positive</div>' +
-                        '</div>' +
-                        '<div class="sentiment-card">' +
-                        '<div class="percentage neutral">' + data.neutral + '%</div>' +
-                        '<div class="label">Neutral</div>' +
-                        '</div>' +
-                        '</div>' +
-                        '<div class="sentiment">' +
-                        '<div class="sentiment-card">' +
-                        '<div class="percentage negative">' + data.negative + '%</div>' +
-                        '<div class="label">Negative</div>' +
-                        '</div>' +
-                        '<div class="sentiment-card">' +
-                        '<div class="percentage">' + data.mentions + '</div>' +
-                        '<div class="label">Mentions</div>' +
-                        '</div>' +
-                        '</div>' +
-                        '<div class="bar">' +
-                        '<div class="bar-fill" style="width: ' + data.positive + '%"></div>' +
-                        '</div>' +
-                        '<div class="sources">' +
-                        '<div class="source">📱 Reddit<br>89 mentions</div>' +
-                        '<div class="source">⭐ Reviews<br>156 reviews</div>' +
-                        '<div class="source">📢 Social Media<br>73 mentions</div>' +
-                        '<div class="source">📰 News<br>24 articles</div>' +
-                        '</div>' +
-                        '<p style="margin: 15px 0; padding: 10px; background: #f0f7ff; border-radius: 6px; font-size: 13px;"><strong>💡 Key Insight:</strong> Strong positive sentiment with quality and reputation as main themes across all platforms.</p>' +
-                        '<button class="download-btn" onclick="downloadReport(\'' + data.reportId + '\')">📄 Download PDF Report</button>' +
-                        '</div>';
-                    
+                    // Create intelligence display
+                    const html = createIntelligenceHTML(data);
                     addMessage('bot', html);
                 })
                 .catch(error => {
-                    console.error('Fetch error:', error);
-                    // Remove typing indicator
+                    console.error('Error:', error);
                     const messages = document.getElementById('messages');
                     messages.removeChild(messages.lastChild);
-                    addMessage('bot', '❌ Analysis temporarily unavailable. Please try again in a moment.');
+                    addMessage('bot', '❌ Analysis error. Please try again.');
                 });
             } else {
                 setTimeout(() => {
-                    // Remove typing indicator
                     const messages = document.getElementById('messages');
                     messages.removeChild(messages.lastChild);
-                    addMessage('bot', 'I can help with market analysis and brand insights! Try asking about specific companies like "Tesla sentiment" or "Boston University insights".');
+                    addMessage('bot', 'I can help with market analysis! Try: "Tesla sentiment" or "Boston University insights"');
                 }, 1000);
             }
+        }
+        
+        function createIntelligenceHTML(data) {
+            return '<div class="intelligence">' +
+                '<div class="intel-title">' + data.query + ' - Market Analysis</div>' +
+                '<div class="sentiment">' +
+                '<div class="sentiment-card">' +
+                '<div class="percentage positive">' + data.positive + '%</div>' +
+                '<div class="label">Positive</div>' +
+                '</div>' +
+                '<div class="sentiment-card">' +
+                '<div class="percentage neutral">' + data.neutral + '%</div>' +
+                '<div class="label">Neutral</div>' +
+                '</div>' +
+                '</div>' +
+                '<div class="sentiment">' +
+                '<div class="sentiment-card">' +
+                '<div class="percentage negative">' + data.negative + '%</div>' +
+                '<div class="label">Negative</div>' +
+                '</div>' +
+                '<div class="sentiment-card">' +
+                '<div class="percentage">' + data.mentions + '</div>' +
+                '<div class="label">Mentions</div>' +
+                '</div>' +
+                '</div>' +
+                '<div class="bar">' +
+                '<div class="bar-fill" style="width: ' + data.positive + '%"></div>' +
+                '</div>' +
+                '<div class="sources">' +
+                '<div class="source">📱 Reddit<br>89 mentions</div>' +
+                '<div class="source">⭐ Reviews<br>156 reviews</div>' +
+                '<div class="source">📢 Social<br>73 mentions</div>' +
+                '<div class="source">📰 News<br>24 articles</div>' +
+                '</div>' +
+                '<div class="insight"><strong>💡 Key Insight:</strong> Strong positive sentiment with quality and reputation as main themes.</div>' +
+                '<button class="download-btn" onclick="downloadReport(\'' + data.reportId + '\')">📄 Download PDF Report</button>' +
+                '</div>';
         }
         
         function downloadReport(reportId) {
@@ -390,8 +408,7 @@ app.get('/', (req, res) => {
             window.open('/api/report/' + reportId, '_blank');
         }
         
-        // Test function to check if JavaScript is working
-        console.log('InsightEar GPT JavaScript loaded successfully');
+        console.log('InsightEar GPT loaded successfully');
     </script>
 </body>
 </html>`);
@@ -405,6 +422,7 @@ app.post('/api/intelligence', (req, res) => {
         const data = generateIntelligence(query);
         reports.set(data.reportId, data);
         
+        console.log('Intelligence generated:', data);
         res.json(data);
     } catch (error) {
         console.error('Intelligence error:', error);
@@ -417,8 +435,10 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No file' });
         }
+        console.log('File uploaded:', req.file.originalname);
         res.json({ message: 'File uploaded: ' + req.file.originalname });
     } catch (error) {
+        console.error('Upload error:', error);
         res.status(500).json({ error: 'Upload failed' });
     }
 });
@@ -429,6 +449,8 @@ app.get('/api/report/:reportId', (req, res) => {
         if (!data) {
             return res.status(404).send('Report not found');
         }
+        
+        console.log('Generating report for:', req.params.reportId);
         
         const html = `<!DOCTYPE html>
 <html>
@@ -543,8 +565,8 @@ app.get('/api/report/:reportId', (req, res) => {
     <div class="section">
         <div class="section-title">Key Insights</div>
         <div class="insight">Strong positive sentiment indicates favorable market positioning</div>
+        <div class="insight">Quality and reputation emerge as primary positive themes</div>
         <div class="insight">Brand perception consistently positive across major platforms</div>
-        <div class="insight">Market engagement levels above industry benchmarks</div>
         <div class="insight">Customer satisfaction metrics trending upward</div>
     </div>
 
@@ -569,16 +591,21 @@ app.get('/api/report/:reportId', (req, res) => {
         res.send(html);
         
     } catch (error) {
+        console.error('Report error:', error);
         res.status(500).send('Report error');
     }
 });
 
+app.get('/favicon.ico', (req, res) => {
+    res.status(204).end();
+});
+
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 process.on('SIGTERM', () => {
-    console.log('Shutting down');
+    console.log('Shutting down gracefully');
     process.exit(0);
 });
 
