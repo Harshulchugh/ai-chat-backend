@@ -1045,11 +1045,18 @@ app.post('/api/chat/message', async (req, res) => {
         // Generate enhanced intelligence
         let intelligenceData = null;
         if (needsIntelligence) {
-            console.log('🧠 Generating ' + industry + ' intelligence for: ' + safeMessage);
-            intelligenceData = generateEnhancedIntelligence(safeMessage, industry);
-            
-            // Store report for PDF generation
-            reports.set(intelligenceData.report_id, intelligenceData);
+            try {
+                console.log('🧠 Generating ' + industry + ' intelligence for: ' + safeMessage);
+                intelligenceData = generateEnhancedIntelligence(safeMessage, industry);
+                
+                // Store report for PDF generation
+                if (intelligenceData && intelligenceData.report_id) {
+                    reports.set(intelligenceData.report_id, intelligenceData);
+                }
+            } catch (error) {
+                console.error('Intelligence generation error:', error);
+                // Continue without intelligence data if generation fails
+            }
         }
 
         // Prepare message with proper file attachments
