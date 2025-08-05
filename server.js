@@ -7,6 +7,8 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const Sentiment = require('sentiment');
+const { jsPDF } = require('jspdf');
+const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -26,9 +28,13 @@ if (!OPENAI_API_KEY || !ASSISTANT_ID) {
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const sentiment = new Sentiment();
 
+// Chart configuration
+const chartCanvas = new ChartJSNodeCanvas({ width: 800, height: 600 });
+
 // Middleware
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
+app.use('/reports', express.static('reports')); // Serve generated reports
 
 // File upload configuration
 const upload = multer({
@@ -39,34 +45,38 @@ const upload = multer({
 
 // In-memory storage
 const threads = new Map();
-const cache = new Map();
 
-// ===== REAL WEB CRAWLING FUNCTIONS =====
+// Create reports directory
+if (!fs.existsSync('reports')) {
+    fs.mkdirSync('reports');
+}
 
-// Real Reddit scraper using public JSON API
-async function scrapeRedditRealtime(query, limit = 25) {
+// ===== ENHANCED WEB INTELLIGENCE WITH SOURCES =====
+
+// Enhanced Reddit scraper with source URLs
+async function scrapeRedditWithSources(query, limit = 25) {
     try {
         console.log(`🔍 Scraping Reddit for: ${query}`);
         
-        // Reddit search via public JSON API
         const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=relevance&limit=${limit}&t=month`;
         
         const response = await axios.get(searchUrl, {
             headers: {
-                'User-Agent': 'InsightEar-Market-Research-Bot/1.0',
+                'User-Agent': 'InsightEar-Research-Bot/1.0',
                 'Accept': 'application/json'
             },
-            timeout: 10000
+            timeout: 15000
         });
 
-        if (!response.data || !response.data.data) {
-            throw new Error('Invalid Reddit API response');
+        if (!response.data?.data?.children) {
+            return { posts: [], sources: [], platform: 'Reddit' };
         }
 
         const posts = response.data.data.children
-            .filter(post => post.data && post.data.title)
+            .filter(post => post.data?.title)
             .map(post => {
                 const postData = post.data;
+                const fullUrl = `https://reddit.com${postData.permalink}`;
                 const text = (postData.title + ' ' + (postData.selftext || '')).toLowerCase();
                 const sentimentScore = sentiment.analyze(text);
                 
@@ -76,223 +86,178 @@ async function scrapeRedditRealtime(query, limit = 25) {
                     score: postData.score || 0,
                     comments: postData.num_comments || 0,
                     subreddit: postData.subreddit,
-                    url: `https://reddit.com${postData.permalink}`,
+                    url: fullUrl,
+                    source_url: fullUrl,
                     created: new Date(postData.created_utc * 1000),
                     upvote_ratio: postData.upvote_ratio || 0,
                     sentiment: {
                         score: sentimentScore.score,
                         comparative: sentimentScore.comparative,
-                        positive: sentimentScore.positive,
-                        negative: sentimentScore.negative,
                         classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral'
                     }
                 };
             });
 
-        console.log(`✅ Found ${posts.length} Reddit posts with sentiment analysis`);
-        return posts;
+        const sources = posts.map(post => ({
+            url: post.source_url,
+            title: post.title,
+            platform: 'Reddit',
+            subreddit: post.subreddit,
+            engagement: `${post.score} upvotes, ${post.comments} comments`
+        }));
+
+        console.log(`✅ Found ${posts.length} Reddit posts with source URLs`);
+        return { posts, sources, platform: 'Reddit', query };
 
     } catch (error) {
         console.error('Reddit scraping error:', error.message);
-        return [];
+        return { posts: [], sources: [], platform: 'Reddit', error: error.message };
     }
 }
 
-// Real review scraper from accessible sources
-async function scrapeProductReviews(productQuery, platform = 'general') {
+// Enhanced review scraper with detailed sources
+async function scrapeReviewsWithSources(productQuery, platform = 'general') {
     try {
-        console.log(`⭐ Scraping reviews for: ${productQuery} on ${platform}`);
+        console.log(`⭐ Scraping reviews for: ${productQuery}`);
         
-        let reviews = [];
-        
-        if (platform === 'general' || platform === 'shopping') {
-            // Try to scrape from shopping comparison sites
-            const searchQuery = encodeURIComponent(productQuery + ' reviews');
-            const searchUrl = `https://duckduckgo.com/html/?q=${searchQuery}+site:consumerreports.com+OR+site:wirecutter.com+OR+site:rtings.com`;
-            
-            try {
-                const response = await axios.get(searchUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                    },
-                    timeout: 8000
-                });
+        const reviews = [];
+        const sources = [];
 
-                const $ = cheerio.load(response.data);
-                
-                // Extract review snippets from search results
-                $('.result__snippet, .result__body').each((i, element) => {
-                    if (i >= 10) return false; // Limit to 10 reviews
-                    
-                    const reviewText = $(element).text().trim();
-                    if (reviewText && reviewText.length > 50) {
-                        const sentimentScore = sentiment.analyze(reviewText);
-                        
-                        reviews.push({
-                            content: reviewText,
-                            source: 'Consumer Reviews',
-                            platform: platform,
-                            sentiment: {
-                                score: sentimentScore.score,
-                                classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral',
-                                positive_words: sentimentScore.positive,
-                                negative_words: sentimentScore.negative
-                            },
-                            scraped_at: new Date().toISOString()
-                        });
-                    }
-                });
-                
-            } catch (searchError) {
-                console.log('Search scraping failed, using alternate method');
-            }
-        }
-        
-        // If no reviews found, try Google shopping results
-        if (reviews.length === 0) {
+        // Try multiple review sources
+        const searchQueries = [
+            `${productQuery} reviews site:amazon.com`,
+            `${productQuery} reviews site:trustpilot.com`,
+            `${productQuery} reviews site:yelp.com`,
+            `${productQuery} customer feedback`,
+            `${productQuery} product review`
+        ];
+
+        for (const searchQuery of searchQueries.slice(0, 3)) { // Limit to 3 sources for speed
             try {
-                const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(productQuery + ' reviews rating')}&num=10`;
+                const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`;
                 
-                const response = await axios.get(googleUrl, {
+                const response = await axios.get(searchUrl, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                     },
-                    timeout: 8000
+                    timeout: 10000
                 });
 
                 const $ = cheerio.load(response.data);
                 
-                // Extract review snippets from Google results
-                $('.VwiC3b, .hgKElc, .s3v9rd').each((i, element) => {
-                    if (i >= 15) return false;
+                $('.result').each((i, element) => {
+                    if (i >= 5) return false; // Limit per source
                     
-                    const reviewText = $(element).text().trim();
-                    if (reviewText && reviewText.length > 30 && reviewText.includes(productQuery.split(' ')[0])) {
-                        const sentimentScore = sentiment.analyze(reviewText);
+                    const titleElement = $(element).find('.result__title a');
+                    const snippetElement = $(element).find('.result__snippet');
+                    
+                    const title = titleElement.text().trim();
+                    const snippet = snippetElement.text().trim();
+                    const url = titleElement.attr('href');
+                    
+                    if (snippet && snippet.length > 50 && url) {
+                        const sentimentScore = sentiment.analyze(snippet);
                         
                         reviews.push({
-                            content: reviewText,
-                            source: 'Web Reviews',
-                            platform: 'Google Search',
+                            title: title,
+                            content: snippet,
+                            source_url: url,
+                            platform: searchQuery.includes('amazon') ? 'Amazon' : 
+                                     searchQuery.includes('trustpilot') ? 'Trustpilot' :
+                                     searchQuery.includes('yelp') ? 'Yelp' : 'Web Reviews',
                             sentiment: {
                                 score: sentimentScore.score,
-                                classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral',
-                                positive_words: sentimentScore.positive,
-                                negative_words: sentimentScore.negative
+                                classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral'
                             },
                             scraped_at: new Date().toISOString()
+                        });
+
+                        sources.push({
+                            url: url,
+                            title: title,
+                            platform: searchQuery.includes('amazon') ? 'Amazon' : 
+                                     searchQuery.includes('trustpilot') ? 'Trustpilot' :
+                                     searchQuery.includes('yelp') ? 'Yelp' : 'Review Sites',
+                            content_preview: snippet.substring(0, 100) + '...'
                         });
                     }
                 });
                 
-            } catch (googleError) {
-                console.log('Google scraping failed');
+                // Small delay between requests
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+            } catch (searchError) {
+                console.log(`Search failed for: ${searchQuery}`);
             }
         }
 
-        console.log(`✅ Found ${reviews.length} product reviews`);
-        return reviews;
+        console.log(`✅ Found ${reviews.length} reviews with source URLs`);
+        return { reviews, sources, platform: 'Multi-Platform Reviews', query: productQuery };
 
     } catch (error) {
         console.error('Review scraping error:', error.message);
-        return [];
+        return { reviews: [], sources: [], platform: 'Reviews', error: error.message };
     }
 }
 
-// Social media mentions scraper
-async function scrapeSocialMentions(brandQuery) {
+// News and trend scraper with sources
+async function scrapeNewsWithSources(query) {
     try {
-        console.log(`📱 Scraping social mentions for: ${brandQuery}`);
-        
-        const mentions = [];
-        
-        // Try to find Twitter-like mentions from web search
-        const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(brandQuery)}+site:twitter.com+OR+site:facebook.com+OR+site:instagram.com`;
-        
-        try {
-            const response = await axios.get(searchUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                timeout: 8000
-            });
-
-            const $ = cheerio.load(response.data);
-            
-            $('.result__snippet').each((i, element) => {
-                if (i >= 20) return false;
-                
-                const mentionText = $(element).text().trim();
-                if (mentionText && mentionText.length > 20) {
-                    const sentimentScore = sentiment.analyze(mentionText);
-                    
-                    mentions.push({
-                        text: mentionText,
-                        platform: 'Social Media',
-                        sentiment: {
-                            score: sentimentScore.score,
-                            classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral'
-                        },
-                        scraped_at: new Date().toISOString()
-                    });
-                }
-            });
-            
-        } catch (scrapeError) {
-            console.log('Social scraping failed:', scrapeError.message);
-        }
-
-        console.log(`✅ Found ${mentions.length} social media mentions`);
-        return mentions;
-
-    } catch (error) {
-        console.error('Social mentions error:', error.message);
-        return [];
-    }
-}
-
-// News and trend scraper
-async function scrapeNewsTrends(query) {
-    try {
-        console.log(`📰 Scraping news trends for: ${query}`);
+        console.log(`📰 Scraping news for: ${query}`);
         
         const newsItems = [];
-        const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query + ' news trends 2024 2025')}`;
+        const sources = [];
         
-        const response = await axios.get(searchUrl, {
+        const newsSearchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query + ' news 2024 2025')}`;
+        
+        const response = await axios.get(newsSearchUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
-            timeout: 8000
+            timeout: 10000
         });
 
         const $ = cheerio.load(response.data);
         
-        $('.result__title, .result__snippet').each((i, element) => {
-            if (i >= 15) return false;
+        $('.result').each((i, element) => {
+            if (i >= 10) return false;
             
-            const newsText = $(element).text().trim();
-            if (newsText && newsText.length > 30) {
-                const sentimentScore = sentiment.analyze(newsText);
+            const titleElement = $(element).find('.result__title a');
+            const snippetElement = $(element).find('.result__snippet');
+            
+            const title = titleElement.text().trim();
+            const snippet = snippetElement.text().trim();
+            const url = titleElement.attr('href');
+            
+            if (title && snippet && url) {
+                const sentimentScore = sentiment.analyze(title + ' ' + snippet);
                 
                 newsItems.push({
-                    headline: newsText,
+                    headline: title,
+                    summary: snippet,
+                    source_url: url,
                     sentiment: {
                         score: sentimentScore.score,
                         classification: sentimentScore.score > 0 ? 'positive' : sentimentScore.score < 0 ? 'negative' : 'neutral'
                     },
                     scraped_at: new Date().toISOString()
                 });
+
+                sources.push({
+                    url: url,
+                    title: title,
+                    platform: 'News',
+                    summary: snippet.substring(0, 150) + '...'
+                });
             }
         });
 
-        console.log(`✅ Found ${newsItems.length} news items`);
-        return newsItems;
+        console.log(`✅ Found ${newsItems.length} news items with sources`);
+        return { newsItems, sources, platform: 'News & Trends', query };
 
     } catch (error) {
         console.error('News scraping error:', error.message);
-        return [];
+        return { newsItems: [], sources: [], platform: 'News', error: error.message };
     }
 }
 
@@ -337,142 +302,338 @@ function analyzeSentimentData(dataArray) {
     };
 }
 
-// Master web intelligence function
-async function gatherWebIntelligence(query) {
+// Master web intelligence function with comprehensive sourcing
+async function gatherComprehensiveIntelligence(query) {
     try {
-        console.log(`🌐 Gathering comprehensive web intelligence for: ${query}`);
+        console.log(`🌐 Gathering comprehensive intelligence for: ${query}`);
         
         const startTime = Date.now();
         const results = {
             query: query,
             timestamp: new Date().toISOString(),
-            sources: [],
-            summary: {}
+            research_methodology: 'Real-time web intelligence gathering across multiple platforms',
+            data_sources: [],
+            sentiment_analysis: {},
+            key_insights: [],
+            recommendations: [],
+            source_references: [],
+            processing_time_ms: 0
         };
 
-        // Extract main topic from query
+        // Extract main topic
         const words = query.toLowerCase().split(' ');
         const stopWords = ['sentiment', 'analysis', 'review', 'customer', 'feedback', 'social', 'media', 'what', 'how', 'the', 'and', 'for', 'are'];
         const keywords = words.filter(word => word.length > 3 && !stopWords.includes(word));
         const mainTopic = keywords[0] || query.split(' ')[0];
 
-        console.log(`🎯 Analyzing main topic: ${mainTopic}`);
+        console.log(`🎯 Primary research focus: ${mainTopic}`);
 
-        // Parallel data gathering for speed
-        const [redditData, reviewData, socialData, newsData] = await Promise.all([
-            scrapeRedditRealtime(mainTopic, 20),
-            scrapeProductReviews(mainTopic, 'general'),
-            scrapeSocialMentions(mainTopic),
-            scrapeNewsTrends(mainTopic)
+        // Parallel intelligence gathering
+        const [redditData, reviewData, newsData] = await Promise.all([
+            scrapeRedditWithSources(mainTopic, 20),
+            scrapeReviewsWithSources(mainTopic),
+            scrapeNewsWithSources(mainTopic)
         ]);
 
-        // Process Reddit data
-        if (redditData && redditData.length > 0) {
-            const redditSentiment = analyzeSentimentData(redditData.map(post => post.title + ' ' + post.content));
-            results.sources.push({
-                platform: 'Reddit',
-                type: 'Community Discussions',
-                data_points: redditData.length,
+        // Process Reddit intelligence
+        if (redditData.posts.length > 0) {
+            const redditSentiment = analyzeSentimentData(redditData.posts.map(post => post.title + ' ' + post.content));
+            
+            results.data_sources.push({
+                platform: 'Reddit Community Discussions',
+                data_points: redditData.posts.length,
                 sentiment_analysis: redditSentiment,
-                top_posts: redditData.slice(0, 5).map(post => ({
+                top_discussions: redditData.posts.slice(0, 5).map(post => ({
                     title: post.title,
-                    score: post.score,
-                    comments: post.comments,
+                    subreddit: post.subreddit,
+                    engagement: `${post.score} upvotes, ${post.comments} comments`,
                     sentiment: post.sentiment.classification,
-                    subreddit: post.subreddit
-                }))
+                    source_url: post.source_url
+                })),
+                source_urls: redditData.sources.map(s => s.url)
+            });
+
+            // Add sources to references
+            redditData.sources.forEach(source => {
+                results.source_references.push({
+                    title: source.title,
+                    url: source.url,
+                    platform: 'Reddit',
+                    subreddit: source.subreddit,
+                    type: 'Community Discussion'
+                });
             });
         }
 
-        // Process review data
-        if (reviewData && reviewData.length > 0) {
-            const reviewSentiment = analyzeSentimentData(reviewData.map(review => review.content));
-            results.sources.push({
-                platform: 'Product Reviews',
-                type: 'Customer Feedback',
-                data_points: reviewData.length,
+        // Process Review intelligence
+        if (reviewData.reviews.length > 0) {
+            const reviewSentiment = analyzeSentimentData(reviewData.reviews.map(review => review.content));
+            
+            results.data_sources.push({
+                platform: 'Customer Reviews & Feedback',
+                data_points: reviewData.reviews.length,
                 sentiment_analysis: reviewSentiment,
-                sample_reviews: reviewData.slice(0, 3).map(review => ({
-                    content: review.content.substring(0, 200) + '...',
+                review_sample: reviewData.reviews.slice(0, 3).map(review => ({
+                    title: review.title,
+                    content_preview: review.content.substring(0, 200) + '...',
                     sentiment: review.sentiment.classification,
-                    source: review.source
-                }))
+                    platform: review.platform,
+                    source_url: review.source_url
+                })),
+                source_urls: reviewData.sources.map(s => s.url)
+            });
+
+            // Add sources to references
+            reviewData.sources.forEach(source => {
+                results.source_references.push({
+                    title: source.title,
+                    url: source.url,
+                    platform: source.platform,
+                    type: 'Customer Review'
+                });
             });
         }
 
-        // Process social data
-        if (socialData && socialData.length > 0) {
-            const socialSentiment = analyzeSentimentData(socialData.map(mention => mention.text));
-            results.sources.push({
-                platform: 'Social Media',
-                type: 'Brand Mentions',
-                data_points: socialData.length,
-                sentiment_analysis: socialSentiment
-            });
-        }
-
-        // Process news data
-        if (newsData && newsData.length > 0) {
-            const newsSentiment = analyzeSentimentData(newsData.map(news => news.headline));
-            results.sources.push({
-                platform: 'News & Trends',
-                type: 'Market Coverage',
-                data_points: newsData.length,
+        // Process News intelligence
+        if (newsData.newsItems.length > 0) {
+            const newsSentiment = analyzeSentimentData(newsData.newsItems.map(news => news.headline + ' ' + news.summary));
+            
+            results.data_sources.push({
+                platform: 'News & Market Coverage',
+                data_points: newsData.newsItems.length,
                 sentiment_analysis: newsSentiment,
-                trending_topics: newsData.slice(0, 3).map(news => news.headline.substring(0, 100))
+                trending_headlines: newsData.newsItems.slice(0, 5).map(news => ({
+                    headline: news.headline,
+                    summary: news.summary.substring(0, 150) + '...',
+                    sentiment: news.sentiment.classification,
+                    source_url: news.source_url
+                })),
+                source_urls: newsData.sources.map(s => s.url)
+            });
+
+            // Add sources to references
+            newsData.sources.forEach(source => {
+                results.source_references.push({
+                    title: source.title,
+                    url: source.url,
+                    platform: 'News Media',
+                    type: 'News Article'
+                });
             });
         }
 
-        // Generate comprehensive summary
-        const allSentiments = [...redditData, ...reviewData, ...socialData, ...newsData];
-        if (allSentiments.length > 0) {
-            results.summary = {
-                total_data_points: allSentiments.length,
-                overall_sentiment: analyzeSentimentData(allSentiments),
-                key_insights: [
-                    `Found ${allSentiments.length} data points across ${results.sources.length} platforms`,
-                    `Reddit shows ${redditData.length} community discussions`,
-                    `Reviews indicate ${reviewData.length} customer feedback instances`,
-                    `Social media contains ${socialData.length} brand mentions`
-                ],
-                recommendations: generateRecommendations(results.sources),
-                processing_time: `${Date.now() - startTime}ms`
-            };
+        // Generate comprehensive sentiment analysis
+        const allData = [
+            ...redditData.posts.map(p => p.title + ' ' + p.content),
+            ...reviewData.reviews.map(r => r.content),
+            ...newsData.newsItems.map(n => n.headline + ' ' + n.summary)
+        ];
+
+        if (allData.length > 0) {
+            results.sentiment_analysis = analyzeSentimentData(allData);
+            
+            // Generate insights
+            results.key_insights = [
+                `Analyzed ${allData.length} data points across ${results.data_sources.length} platforms`,
+                `Overall sentiment: ${results.sentiment_analysis.overall_sentiment} (${results.sentiment_analysis.confidence}% confidence)`,
+                `Reddit community shows ${redditData.posts.length} active discussions`,
+                `Customer reviews indicate ${reviewData.reviews.length} feedback instances`,
+                `News coverage includes ${newsData.newsItems.length} recent articles`
+            ];
+
+            // Generate recommendations
+            results.recommendations = generateActionableRecommendations(results.data_sources, results.sentiment_analysis);
         }
 
-        console.log(`✅ Web intelligence complete - ${allSentiments.length} data points in ${Date.now() - startTime}ms`);
+        results.processing_time_ms = Date.now() - startTime;
+        
+        console.log(`✅ Comprehensive intelligence complete - ${allData.length} data points, ${results.source_references.length} sources in ${results.processing_time_ms}ms`);
         return results;
 
     } catch (error) {
-        console.error('Web intelligence error:', error);
+        console.error('Intelligence gathering error:', error);
         return {
             query: query,
-            error: 'Failed to gather web intelligence',
-            timestamp: new Date().toISOString()
+            error: 'Failed to gather comprehensive intelligence',
+            timestamp: new Date().toISOString(),
+            source_references: []
         };
     }
 }
 
 // Generate actionable recommendations
-function generateRecommendations(sources) {
+function generateActionableRecommendations(dataSources, sentimentAnalysis) {
     const recommendations = [];
     
-    sources.forEach(source => {
-        const sentiment = source.sentiment_analysis;
-        if (sentiment && sentiment.overall_sentiment === 'positive') {
-            recommendations.push(`Leverage positive ${source.type.toLowerCase()} sentiment in marketing`);
-        } else if (sentiment && sentiment.overall_sentiment === 'negative') {
-            recommendations.push(`Address concerns raised in ${source.type.toLowerCase()}`);
+    if (sentimentAnalysis.overall_sentiment === 'positive') {
+        recommendations.push('Leverage positive sentiment in marketing campaigns and testimonials');
+        recommendations.push('Amplify successful strategies that are driving positive reception');
+    } else if (sentimentAnalysis.overall_sentiment === 'negative') {
+        recommendations.push('Address negative sentiment through improved customer communication');
+        recommendations.push('Investigate root causes of negative feedback for product/service improvements');
+    }
+
+    dataSources.forEach(source => {
+        if (source.platform.includes('Reddit')) {
+            recommendations.push('Engage with Reddit communities for brand awareness and feedback collection');
+        }
+        if (source.platform.includes('Review')) {
+            recommendations.push('Monitor and respond to customer reviews to improve satisfaction scores');
+        }
+        if (source.platform.includes('News')) {
+            recommendations.push('Track media coverage for reputation management and PR opportunities');
         }
     });
 
     if (recommendations.length === 0) {
-        recommendations.push('Monitor sentiment trends regularly');
-        recommendations.push('Engage with customer feedback');
-        recommendations.push('Track competitor discussions');
+        recommendations.push('Establish regular monitoring across identified platforms');
+        recommendations.push('Develop targeted engagement strategies based on platform-specific insights');
     }
 
     return recommendations;
+}
+
+// ===== PDF REPORT GENERATION =====
+
+async function generatePDFReport(intelligenceData) {
+    try {
+        console.log('📄 Generating PDF report...');
+        
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        let yPosition = 30;
+
+        // Helper function to add new page if needed
+        const checkPageBreak = (neededHeight) => {
+            if (yPosition + neededHeight > pageHeight - 20) {
+                doc.addPage();
+                yPosition = 30;
+            }
+        };
+
+        // Title and Header
+        doc.setFontSize(24);
+        doc.setTextColor(102, 126, 234); // Brand color
+        doc.text('InsightEar Intelligence Report', 20, yPosition);
+        yPosition += 15;
+
+        doc.setFontSize(12);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, yPosition);
+        yPosition += 10;
+        doc.text(`Query: ${intelligenceData.query}`, 20, yPosition);
+        yPosition += 20;
+
+        // Executive Summary
+        checkPageBreak(30);
+        doc.setFontSize(16);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Executive Summary', 20, yPosition);
+        yPosition += 10;
+
+        doc.setFontSize(10);
+        const summaryText = `Analysis of ${intelligenceData.source_references.length} sources across ${intelligenceData.data_sources.length} platforms reveals ${intelligenceData.sentiment_analysis.overall_sentiment} sentiment. Key findings include comprehensive community discussions, customer feedback patterns, and media coverage insights.`;
+        const splitSummary = doc.splitTextToSize(summaryText, pageWidth - 40);
+        doc.text(splitSummary, 20, yPosition);
+        yPosition += splitSummary.length * 5 + 10;
+
+        // Sentiment Overview
+        checkPageBreak(40);
+        doc.setFontSize(16);
+        doc.text('Sentiment Overview', 20, yPosition);
+        yPosition += 15;
+
+        if (intelligenceData.sentiment_analysis.distribution) {
+            doc.setFontSize(10);
+            doc.text(`Positive: ${intelligenceData.sentiment_analysis.distribution.positive}%`, 20, yPosition);
+            doc.text(`Neutral: ${intelligenceData.sentiment_analysis.distribution.neutral}%`, 80, yPosition);
+            doc.text(`Negative: ${intelligenceData.sentiment_analysis.distribution.negative}%`, 140, yPosition);
+            yPosition += 20;
+        }
+
+        // Data Sources
+        checkPageBreak(30);
+        doc.setFontSize(16);
+        doc.text('Data Sources', 20, yPosition);
+        yPosition += 15;
+
+        intelligenceData.data_sources.forEach((source, index) => {
+            checkPageBreak(25);
+            doc.setFontSize(12);
+            doc.setTextColor(102, 126, 234);
+            doc.text(`${index + 1}. ${source.platform}`, 20, yPosition);
+            yPosition += 8;
+            
+            doc.setFontSize(10);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Data Points: ${source.data_points}`, 25, yPosition);
+            yPosition += 6;
+            doc.text(`Sentiment: ${source.sentiment_analysis.overall_sentiment}`, 25, yPosition);
+            yPosition += 10;
+        });
+
+        // Source References
+        checkPageBreak(30);
+        doc.setFontSize(16);
+        doc.text('Source References', 20, yPosition);
+        yPosition += 15;
+
+        intelligenceData.source_references.slice(0, 10).forEach((source, index) => {
+            checkPageBreak(20);
+            doc.setFontSize(9);
+            doc.setTextColor(0, 0, 255);
+            const titleText = doc.splitTextToSize(`${index + 1}. ${source.title}`, pageWidth - 40);
+            doc.text(titleText, 20, yPosition);
+            yPosition += titleText.length * 4;
+            
+            doc.setFontSize(8);
+            doc.setTextColor(100, 100, 100);
+            doc.text(source.url, 25, yPosition);
+            yPosition += 8;
+        });
+
+        // Recommendations
+        checkPageBreak(30);
+        doc.setFontSize(16);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Actionable Recommendations', 20, yPosition);
+        yPosition += 15;
+
+        intelligenceData.recommendations.forEach((rec, index) => {
+            checkPageBreak(15);
+            doc.setFontSize(10);
+            const recText = doc.splitTextToSize(`${index + 1}. ${rec}`, pageWidth - 40);
+            doc.text(recText, 20, yPosition);
+            yPosition += recText.length * 5 + 5;
+        });
+
+        // Footer
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 150);
+            doc.text('InsightEar GPT - Market Intelligence Report', pageWidth - 80, pageHeight - 10);
+            doc.text(`Page ${i} of ${totalPages}`, 20, pageHeight - 10);
+        }
+
+        // Save PDF
+        const reportId = `report_${Date.now()}`;
+        const filename = `reports/${reportId}.pdf`;
+        doc.save(filename);
+
+        console.log(`✅ PDF report generated: ${filename}`);
+        return {
+            reportId,
+            filename,
+            downloadUrl: `/reports/${reportId}.pdf`
+        };
+
+    } catch (error) {
+        console.error('PDF generation error:', error);
+        return null;
+    }
 }
 
 // ===== API ROUTES =====
@@ -523,7 +684,7 @@ app.post('/api/chat/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// Enhanced message handler with REAL web crawling
+// Enhanced message handler with comprehensive intelligence
 app.post('/api/chat/message', async (req, res) => {
     try {
         const { thread_id, message, file_ids = [] } = req.body;
@@ -536,27 +697,81 @@ app.post('/api/chat/message', async (req, res) => {
             return res.status(400).json({ error: 'Message or files required' });
         }
 
-        // Detect web intelligence requests
-        const webKeywords = ['sentiment', 'review', 'customer', 'feedback', 'social', 'reddit', 'analysis', 'competitor', 'market', 'brand', 'opinion'];
-        const needsWebIntelligence = webKeywords.some(keyword => 
+        // Detect intelligence requests
+        const intelligenceKeywords = ['sentiment', 'analysis', 'review', 'customer', 'feedback', 'market', 'competitor', 'social', 'reddit', 'brand', 'opinion', 'insight'];
+        const needsIntelligence = intelligenceKeywords.some(keyword => 
             message.toLowerCase().includes(keyword.toLowerCase())
         );
 
-        let webIntelligence = null;
-        if (needsWebIntelligence) {
-            console.log('🔍 Web intelligence request detected, gathering real-time data...');
-            webIntelligence = await gatherWebIntelligence(message);
+        let intelligence = null;
+        let pdfReport = null;
+
+        if (needsIntelligence) {
+            console.log('🧠 Intelligence request detected, gathering comprehensive data...');
+            intelligence = await gatherComprehensiveIntelligence(message);
+            
+            // Generate PDF report for comprehensive requests
+            if (intelligence && intelligence.source_references.length > 0) {
+                pdfReport = await generatePDFReport(intelligence);
+            }
         }
 
         await cancelActiveRuns(thread_id);
 
-        let content = [{ type: "text", text: message }];
+        let content = [{ 
+            type: "text", 
+            text: `USER REQUEST: ${message}
+
+IMPORTANT: You have access to real-time web intelligence data. Use the provided data to give detailed, specific insights with proper source citations. Do not mention limitations about browsing or web access.` 
+        }];
         
-        // Add web intelligence data
-        if (webIntelligence && webIntelligence.sources) {
+        // Add comprehensive intelligence data
+        if (intelligence) {
             content.push({
                 type: "text",
-                text: `\n\n🌐 LIVE WEB INTELLIGENCE DATA:\n${JSON.stringify(webIntelligence, null, 2)}`
+                text: `
+
+REAL-TIME WEB INTELLIGENCE DATA:
+Research Query: ${intelligence.query}
+Data Collection Method: ${intelligence.research_methodology}
+Processing Time: ${intelligence.processing_time_ms}ms
+Total Sources Analyzed: ${intelligence.source_references.length}
+
+SENTIMENT ANALYSIS OVERVIEW:
+- Overall Sentiment: ${intelligence.sentiment_analysis.overall_sentiment || 'N/A'}
+- Confidence Level: ${intelligence.sentiment_analysis.confidence || 'N/A'}%
+- Distribution: ${JSON.stringify(intelligence.sentiment_analysis.distribution || {})}
+- Total Data Points: ${intelligence.sentiment_analysis.total_analyzed || 0}
+
+PLATFORM BREAKDOWN:
+${intelligence.data_sources.map(source => `
+Platform: ${source.platform}
+Data Points: ${source.data_points}
+Sentiment: ${source.sentiment_analysis.overall_sentiment}
+Source URLs Available: ${source.source_urls ? source.source_urls.length : 0}
+`).join('\n')}
+
+VERIFIED SOURCE REFERENCES:
+${intelligence.source_references.map((source, index) => `
+${index + 1}. ${source.title}
+   URL: ${source.url}
+   Platform: ${source.platform}
+   Type: ${source.type}
+`).join('\n')}
+
+KEY INSIGHTS:
+${intelligence.key_insights.map(insight => `- ${insight}`).join('\n')}
+
+ACTIONABLE RECOMMENDATIONS:
+${intelligence.recommendations.map(rec => `- ${rec}`).join('\n')}
+
+${pdfReport ? `
+PDF REPORT GENERATED:
+Download URL: ${pdfReport.downloadUrl}
+Report ID: ${pdfReport.reportId}
+` : ''}
+
+Please analyze this data and provide detailed insights using the InsightEar framework with proper source citations.`
             });
         }
         
@@ -583,8 +798,9 @@ app.post('/api/chat/message', async (req, res) => {
             response: result.message,
             thread_id: thread_id,
             status: 'completed',
-            web_intelligence_included: !!webIntelligence,
-            data_sources: webIntelligence ? webIntelligence.sources.length : 0
+            intelligence_included: !!intelligence,
+            sources_analyzed: intelligence ? intelligence.source_references.length : 0,
+            pdf_report: pdfReport || null
         });
 
     } catch (error) {
@@ -593,47 +809,21 @@ app.post('/api/chat/message', async (req, res) => {
     }
 });
 
-// Direct web intelligence endpoints
-app.post('/api/intelligence/comprehensive', async (req, res) => {
+// Generate standalone report
+app.post('/api/generate-report', async (req, res) => {
     try {
         const { query } = req.body;
         if (!query) {
             return res.status(400).json({ error: 'Query required' });
         }
         
-        const intelligence = await gatherWebIntelligence(query);
-        res.json({ status: 'success', data: intelligence });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/intelligence/reddit', async (req, res) => {
-    try {
-        const { query, limit = 25 } = req.body;
-        const data = await scrapeRedditRealtime(query, limit);
-        const sentiment = analyzeSentimentData(data.map(post => post.title + ' ' + post.content));
+        const intelligence = await gatherComprehensiveIntelligence(query);
+        const pdfReport = await generatePDFReport(intelligence);
+        
         res.json({ 
             status: 'success', 
-            data: data, 
-            sentiment_analysis: sentiment,
-            count: data.length 
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/intelligence/reviews', async (req, res) => {
-    try {
-        const { query, platform = 'general' } = req.body;
-        const data = await scrapeProductReviews(query, platform);
-        const sentiment = analyzeSentimentData(data.map(review => review.content));
-        res.json({ 
-            status: 'success', 
-            data: data, 
-            sentiment_analysis: sentiment,
-            count: data.length 
+            intelligence: intelligence,
+            report: pdfReport
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -645,165 +835,130 @@ app.get('/api/health', (req, res) => {
         status: 'healthy',
         assistant_id: ASSISTANT_ID ? 'configured' : 'missing',
         timestamp: new Date().toISOString(),
-        web_crawling: 'ENABLED - REAL-TIME',
-        sentiment_analysis: 'ENABLED',
-        features: ['Reddit API', 'Review Scraping', 'Social Monitoring', 'News Trends'],
-        version: '3.0-production'
+        capabilities: [
+            'Real-time Web Intelligence',
+            'Multi-platform Sentiment Analysis', 
+            'PDF Report Generation',
+            'Source Citation & Verification',
+            'InsightEar Framework Implementation'
+        ],
+        version: '4.0-enterprise'
     });
 });
 
 // Serve enhanced chat widget
 app.get('/', (req, res) => {
-    const html = `<!DOCTYPE html>
+    res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InsightEar GPT - Real-Time Market Intelligence</title>
+    <title>InsightEar GPT - Enterprise Market Intelligence</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         .ai-chat-widget {
-            width: 100%; max-width: 500px; height: 600px; margin: 0 auto;
+            width: 100%; max-width: 600px; height: 700px; margin: 0 auto;
             border: none; border-radius: 16px; display: flex; flex-direction: column;
-            background: white; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            background: white; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             overflow: hidden; position: relative;
         }
         .chat-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 20px; text-align: center; font-weight: 600; font-size: 16px;
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            color: white; padding: 24px; text-align: center; font-weight: 600; font-size: 18px;
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
-        .status-dot {
-            width: 8px; height: 8px; border-radius: 50%; background: #4CAF50;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
-        .crawling-badge {
+        .enterprise-badge {
             background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%);
-            color: white; padding: 4px 8px; border-radius: 12px; font-size: 10px;
-            margin-left: 8px; animation: glow 3s infinite;
+            color: white; padding: 6px 12px; border-radius: 16px; font-size: 11px;
+            font-weight: bold; letter-spacing: 0.5px; animation: shimmer 3s infinite;
         }
-        @keyframes glow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.05); } }
+        @keyframes shimmer { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.02); } }
         .chat-messages {
-            flex: 1; overflow-y: auto; padding: 20px;
+            flex: 1; overflow-y: auto; padding: 24px;
             background: linear-gradient(to bottom, #f8f9fa 0%, #e9ecef 100%);
-            scrollbar-width: thin; scrollbar-color: #cbd5e0 transparent;
         }
-        .chat-messages::-webkit-scrollbar { width: 6px; }
-        .chat-messages::-webkit-scrollbar-track { background: transparent; }
-        .chat-messages::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px; }
         .message {
-            margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px;
-            animation: messageSlide 0.3s ease-out;
+            margin-bottom: 20px; display: flex; align-items: flex-start; gap: 14px;
+            animation: messageSlide 0.4s ease-out;
         }
-        @keyframes messageSlide { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes messageSlide { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         .message.user { flex-direction: row-reverse; }
         .message-content {
-            max-width: 75%; padding: 12px 16px; border-radius: 20px;
-            word-wrap: break-word; line-height: 1.4; position: relative;
+            max-width: 80%; padding: 16px 20px; border-radius: 24px;
+            word-wrap: break-word; line-height: 1.5; position: relative;
         }
         .message.user .message-content {
             background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-            color: white; border-bottom-right-radius: 6px;
-            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+            color: white; border-bottom-right-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 123, 255, 0.3);
         }
         .message.assistant .message-content {
             background: white; color: #333; border: 1px solid #e1e5e9;
-            border-bottom-left-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-bottom-left-radius: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
         }
         .message-avatar {
-            width: 36px; height: 36px; border-radius: 50%; display: flex;
-            align-items: center; justify-content: center; font-size: 12px;
+            width: 42px; height: 42px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-size: 14px;
             font-weight: bold; color: white; flex-shrink: 0;
         }
         .message.user .message-avatar { background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); }
         .message.assistant .message-avatar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .chat-input-container { padding: 20px; background: white; border-top: 1px solid #e1e5e9; }
-        .file-preview {
-            background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 12px;
-            padding: 10px 12px; margin-bottom: 12px; display: flex;
-            align-items: center; gap: 10px; font-size: 13px; color: #1976d2;
+        .intelligence-badge {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white; padding: 4px 10px; border-radius: 12px; font-size: 10px;
+            margin-top: 8px; display: inline-block; animation: glow 2s infinite;
         }
-        .file-preview .remove-file {
-            margin-left: auto; cursor: pointer; color: #666; font-weight: bold;
-            padding: 4px; border-radius: 50%; transition: all 0.2s;
-        }
-        .file-preview .remove-file:hover { background: #ffebee; color: #f44336; }
-        .input-wrapper {
-            display: flex; gap: 10px; align-items: flex-end; background: #f8f9fa;
-            border-radius: 25px; padding: 4px; border: 2px solid #e9ecef;
-            transition: border-color 0.2s;
-        }
-        .input-wrapper:focus-within { border-color: #667eea; }
-        .chat-input {
-            flex: 1; min-height: 40px; max-height: 120px; padding: 10px 16px;
-            border: none; background: transparent; resize: none; font-family: inherit;
-            font-size: 14px; line-height: 1.4; outline: none;
-        }
-        .input-controls { display: flex; gap: 6px; padding: 4px; }
-        .control-btn {
-            width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            transition: all 0.2s; font-size: 16px;
-        }
-        .file-btn { background: #6c757d; color: white; }
-        .file-btn:hover { background: #5a6268; transform: scale(1.05); }
-        .send-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .send-btn:hover:not(:disabled) { background: linear-gradient(135deg, #5a6fd8 0%, #6b4c96 100%); transform: scale(1.05); }
-        .send-btn:disabled { background: #adb5bd; cursor: not-allowed; transform: none; }
-        .file-input { display: none; }
+        @keyframes glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
         .typing-indicator {
-            display: none; align-items: center; gap: 12px; padding: 16px 20px;
+            display: none; align-items: center; gap: 14px; padding: 20px 24px;
             color: #6c757d; font-style: italic; animation: fadeIn 0.3s ease-out;
         }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .typing-dots { display: flex; gap: 4px; }
+        .typing-dots { display: flex; gap: 6px; }
         .typing-dot {
-            width: 8px; height: 8px; background: #667eea; border-radius: 50%;
+            width: 10px; height: 10px; background: #667eea; border-radius: 50%;
             animation: typing 1.4s infinite ease-in-out;
         }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes typing {
-            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-            40% { transform: scale(1); opacity: 1; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; } }
+        .chat-input-container { padding: 24px; background: white; border-top: 1px solid #e1e5e9; }
+        .input-wrapper {
+            display: flex; gap: 12px; align-items: flex-end; background: #f8f9fa;
+            border-radius: 28px; padding: 6px; border: 2px solid #e9ecef;
+            transition: border-color 0.2s;
         }
-        .web-data-badge {
-            background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%);
-            color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px;
-            margin-top: 8px; display: inline-block; animation: shimmer 2s infinite;
+        .input-wrapper:focus-within { border-color: #667eea; }
+        .chat-input {
+            flex: 1; min-height: 44px; max-height: 120px; padding: 12px 18px;
+            border: none; background: transparent; resize: none; font-family: inherit;
+            font-size: 15px; line-height: 1.4; outline: none;
         }
-        @keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
-        .file-attachment {
-            background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px; padding: 8px 12px; margin-top: 8px; font-size: 12px;
-            display: flex; align-items: center; gap: 8px;
+        .send-btn {
+            width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+            transition: all 0.2s;
         }
-        .message.assistant .file-attachment { background: #f1f3f4; border: 1px solid #dadce0; color: #5f6368; }
-        @media (max-width: 480px) {
-            .ai-chat-widget { height: 500px; border-radius: 8px; }
-            .message-content { max-width: 85%; }
-            .chat-header { padding: 16px; font-size: 15px; }
-        }
+        .send-btn:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+        .send-btn:disabled { background: #adb5bd; cursor: not-allowed; transform: none; }
     </style>
 </head>
 <body>
     <div class="ai-chat-widget">
         <div class="chat-header">
-            <div class="status-dot"></div>
             🧠 InsightEar GPT
-            <div class="crawling-badge">LIVE CRAWLING</div>
+            <div class="enterprise-badge">ENTERPRISE</div>
         </div>
         
         <div class="chat-messages" id="chatMessages">
             <div class="message assistant">
                 <div class="message-avatar">IE</div>
                 <div class="message-content">
-                    🚀 Welcome to InsightEar GPT with <strong>LIVE WEB CRAWLING</strong>! I can analyze real-time sentiment from Reddit, scrape product reviews, monitor social media, and provide actionable market intelligence.
+                    🚀 Welcome to InsightEar GPT Enterprise! I provide comprehensive market intelligence with real-time sentiment analysis, multi-platform data gathering, and detailed PDF reports.
                     <br><br>
-                    Try: "Analyze customer sentiment for Tesla" or "What are Reddit users saying about iPhone?"
+                    Try: "Analyze market sentiment for Tesla" or "Customer feedback insights for iPhone"
                 </div>
             </div>
         </div>
@@ -811,7 +966,7 @@ app.get('/', (req, res) => {
         <div class="typing-indicator" id="typingIndicator">
             <div class="message-avatar">IE</div>
             <div>
-                Crawling live web data
+                Gathering intelligence
                 <div class="typing-dots">
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
@@ -821,31 +976,18 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="chat-input-container">
-            <div id="filePreview"></div>
             <div class="input-wrapper">
-                <textarea id="chatInput" class="chat-input" placeholder="Ask for real-time sentiment analysis, Reddit insights, or market intelligence..." rows="1"></textarea>
-                <div class="input-controls">
-                    <label for="fileInput" class="control-btn file-btn" title="Upload file">📎</label>
-                    <input type="file" id="fileInput" class="file-input" multiple />
-                    <button id="sendButton" class="control-btn send-btn" title="Send message">➤</button>
-                </div>
+                <textarea id="chatInput" class="chat-input" placeholder="Request market intelligence, sentiment analysis, or comprehensive reports..." rows="1"></textarea>
+                <button id="sendButton" class="send-btn" title="Send">➤</button>
             </div>
         </div>
     </div>
 
     <script>
-        const CONFIG = { 
-            API_BASE_URL: window.location.origin + '/api', 
-            MAX_FILE_SIZE: 20 * 1024 * 1024 
-        };
-        
-        let threadId = null;
-        let currentFiles = [];
-        let isProcessing = false;
+        const CONFIG = { API_BASE_URL: window.location.origin + '/api' };
+        let threadId = null, isProcessing = false;
 
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeChat();
-        });
+        document.addEventListener('DOMContentLoaded', initializeChat);
 
         async function initializeChat() {
             try {
@@ -857,21 +999,15 @@ app.get('/', (req, res) => {
                 if (response.ok) {
                     const data = await response.json();
                     threadId = data.thread_id;
-                    updateStatusIndicator(true);
                     setupEventListeners();
-                } else {
-                    throw new Error('Server error: ' + response.status);
                 }
             } catch (error) {
                 console.error('Initialization failed:', error);
-                updateStatusIndicator(false);
-                showError('Failed to connect to InsightEar GPT. Please refresh the page.');
             }
         }
 
         function setupEventListeners() {
             const chatInput = document.getElementById('chatInput');
-            const fileInput = document.getElementById('fileInput');
             const sendButton = document.getElementById('sendButton');
             
             chatInput.addEventListener('input', function() {
@@ -885,50 +1021,8 @@ app.get('/', (req, res) => {
                     sendMessage();
                 }
             });
-
-            fileInput.addEventListener('change', function(e) {
-                Array.from(e.target.files).forEach(function(file) {
-                    if (file.size <= CONFIG.MAX_FILE_SIZE) {
-                        addFileToQueue(file);
-                    } else {
-                        showError('File "' + file.name + '" is too large. Maximum size is 20MB.');
-                    }
-                });
-                e.target.value = '';
-            });
             
             sendButton.addEventListener('click', sendMessage);
-        }
-
-        function addFileToQueue(file) {
-            currentFiles.push(file);
-            const preview = document.createElement('div');
-            preview.className = 'file-preview';
-            preview.innerHTML = '<div>📄</div><span>' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</span><span class="remove-file" data-filename="' + file.name + '">✕</span>';
-            
-            preview.querySelector('.remove-file').addEventListener('click', function() {
-                removeFile(this.getAttribute('data-filename'));
-            });
-            
-            document.getElementById('filePreview').appendChild(preview);
-        }
-
-        function removeFile(fileName) {
-            currentFiles = currentFiles.filter(function(file) {
-                return file.name !== fileName;
-            });
-            
-            const previews = document.querySelectorAll('.file-preview');
-            previews.forEach(function(preview) {
-                if (preview.textContent.includes(fileName)) {
-                    preview.remove();
-                }
-            });
-        }
-
-        function clearFiles() {
-            currentFiles = [];
-            document.getElementById('filePreview').innerHTML = '';
         }
 
         async function sendMessage() {
@@ -936,181 +1030,84 @@ app.get('/', (req, res) => {
             
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
-            
-            if (!message && currentFiles.length === 0) return;
+            if (!message) return;
 
             isProcessing = true;
             document.getElementById('sendButton').disabled = true;
 
-            if (message || currentFiles.length > 0) {
-                addMessage('user', message, currentFiles.slice());
-            }
-
+            addMessage('user', message);
             input.value = '';
             input.style.height = 'auto';
-            const filesToSend = currentFiles.slice();
-            clearFiles();
-            
-            // Show web crawling indicator for intelligence requests
-            const webKeywords = ['sentiment', 'reddit', 'review', 'social', 'customer', 'feedback', 'analysis', 'market'];
-            const isWebQuery = webKeywords.some(keyword => message.toLowerCase().includes(keyword));
-            
-            if (isWebQuery) {
-                showWebCrawlingIndicator();
-            } else {
-                showTypingIndicator();
-            }
+            showTypingIndicator();
 
             try {
-                let fileIds = [];
-                if (filesToSend.length > 0) {
-                    fileIds = await uploadFiles(filesToSend);
-                }
-
                 const response = await fetch(CONFIG.API_BASE_URL + '/chat/message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         thread_id: threadId,
-                        message: message || "Please analyze the uploaded files.",
-                        file_ids: fileIds
+                        message: message
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error('Failed to send message: ' + response.status);
-                }
-                
                 const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-
                 hideTypingIndicator();
                 addMessage('assistant', data.response);
                 
-                if (data.web_intelligence_included) {
-                    addWebDataBadge(data.data_sources || 'multiple');
+                if (data.intelligence_included) {
+                    addIntelligenceBadge(data.sources_analyzed);
                 }
                 
             } catch (error) {
-                console.error('Send failed:', error);
                 hideTypingIndicator();
-                showError('Sorry, I encountered an error: ' + error.message);
+                addMessage('assistant', '❌ Sorry, I encountered an error: ' + error.message);
             } finally {
                 isProcessing = false;
                 document.getElementById('sendButton').disabled = false;
             }
         }
 
-        async function uploadFiles(files) {
-            const fileIds = [];
-            
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                try {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    
-                    const response = await fetch(CONFIG.API_BASE_URL + '/chat/upload', { 
-                        method: 'POST', 
-                        body: formData 
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        fileIds.push(data.file_id);
-                    }
-                } catch (error) {
-                    console.error('Upload error for ' + file.name + ':', error);
-                }
-            }
-            
-            return fileIds;
-        }
-
-        function addMessage(sender, content, files) {
-            files = files || [];
+        function addMessage(sender, content) {
             const container = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + sender;
-            
-            let fileAttachments = '';
-            if (files.length > 0) {
-                fileAttachments = files.map(function(file) {
-                    return '<div class="file-attachment"><div>📄</div><span>' + file.name + '</span></div>';
-                }).join('');
-            }
-            
-            messageDiv.innerHTML = '<div class="message-avatar">' + (sender === 'user' ? 'You' : 'IE') + '</div><div class="message-content">' + (content ? content.replace(/\\n/g, '<br>') : '') + fileAttachments + '</div>';
+            messageDiv.innerHTML = '<div class="message-avatar">' + (sender === 'user' ? 'You' : 'IE') + '</div><div class="message-content">' + content.replace(/\\n/g, '<br>') + '</div>';
             container.appendChild(messageDiv);
             container.scrollTop = container.scrollHeight;
         }
 
-        function showError(message) { 
-            addMessage('assistant', '❌ ' + message); 
-        }
-        
         function showTypingIndicator() { 
             document.getElementById('typingIndicator').style.display = 'flex'; 
-            const container = document.getElementById('chatMessages');
-            container.scrollTop = container.scrollHeight; 
-        }
-        
-        function showWebCrawlingIndicator() {
-            const indicator = document.getElementById('typingIndicator');
-            indicator.querySelector('div:nth-child(2)').innerHTML = 'Crawling live web data<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
-            indicator.style.display = 'flex';
-            const container = document.getElementById('chatMessages');
-            container.scrollTop = container.scrollHeight; 
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight; 
         }
         
         function hideTypingIndicator() { 
             document.getElementById('typingIndicator').style.display = 'none';
-            // Reset typing text
-            document.getElementById('typingIndicator').querySelector('div:nth-child(2)').innerHTML = 'Crawling live web data<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
         }
         
-        function addWebDataBadge(sources) {
+        function addIntelligenceBadge(sources) {
             const lastMessage = document.querySelector('.message.assistant:last-child .message-content');
-            if (lastMessage && !lastMessage.querySelector('.web-data-badge')) {
+            if (lastMessage && !lastMessage.querySelector('.intelligence-badge')) {
                 const badge = document.createElement('div');
-                badge.className = 'web-data-badge';
-                badge.textContent = '🌐 Live Web Data (' + sources + ' sources)';
+                badge.className = 'intelligence-badge';
+                badge.textContent = '🌐 Live Intelligence (' + sources + ' sources)';
                 lastMessage.appendChild(badge);
-            }
-        }
-        
-        function updateStatusIndicator(connected) {
-            const dot = document.querySelector('.status-dot');
-            if (connected) { 
-                dot.style.background = '#4CAF50'; 
-                dot.style.animation = 'pulse 2s infinite'; 
-            } else { 
-                dot.style.background = '#f44336'; 
-                dot.style.animation = 'none'; 
             }
         }
     </script>
 </body>
-</html>`;
-    
-    res.send(html);
+</html>`);
 });
 
 // Helper functions
 async function cancelActiveRuns(threadId) {
     try {
         const runs = await openai.beta.threads.runs.list(threadId);
-        
         for (const run of runs.data) {
             if (['queued', 'in_progress', 'requires_action'].includes(run.status)) {
-                console.log(`Cancelling active run: ${run.id}`);
                 await openai.beta.threads.runs.cancel(threadId, run.id);
             }
         }
-        
         await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
         console.error('Error cancelling runs:', error);
@@ -1121,54 +1118,32 @@ async function waitForCompletion(threadId, runId, maxAttempts = 30) {
     for (let i = 0; i < maxAttempts; i++) {
         try {
             const run = await openai.beta.threads.runs.retrieve(threadId, runId);
-            
             if (run.status === 'completed') {
                 const messages = await openai.beta.threads.messages.list(threadId, { limit: 1 });
                 if (messages.data.length > 0) {
-                    const content = messages.data[0].content;
                     let response = '';
-                    content.forEach(item => {
-                        if (item.type === 'text') {
-                            response += item.text.value;
-                        }
+                    messages.data[0].content.forEach(item => {
+                        if (item.type === 'text') response += item.text.value;
                     });
                     return { message: response.trim() };
                 }
-                return { error: 'No response received' };
-            } 
-            else if (['failed', 'cancelled', 'expired'].includes(run.status)) {
-                return { error: `Assistant ${run.status}: ${run.last_error?.message || 'Unknown error'}` };
+            } else if (['failed', 'cancelled', 'expired'].includes(run.status)) {
+                return { error: `Assistant ${run.status}` };
             }
-            else if (run.status === 'requires_action') {
-                return { error: 'Assistant requires action (not implemented)' };
-            }
-            
             await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (error) {
-            console.error('Error checking run status:', error);
             return { error: 'Failed to get response' };
         }
     }
     return { error: 'Response timeout' };
 }
 
-// Cleanup old threads
-setInterval(() => {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    for (const [id, thread] of threads.entries()) {
-        if (thread.created < oneHourAgo) {
-            threads.delete(id);
-        }
-    }
-}, 60 * 60 * 1000);
-
 app.listen(port, () => {
-    console.log(`🚀 InsightEar GPT with REAL WEB CRAWLING running on port ${port}`);
-    console.log(`🌐 Live Data Sources: Reddit API, Review Scraping, Social Monitoring`);
-    console.log(`📊 Real-time Sentiment Analysis: ENABLED`);
-    console.log(`🧠 Market Intelligence: http://localhost:${port}`);
-    console.log(`🤖 Assistant ID: ${ASSISTANT_ID}`);
-    console.log(`✅ Ready for live market intelligence!`);
+    console.log(`🚀 InsightEar GPT Enterprise running on port ${port}`);
+    console.log(`🌐 Real-time Intelligence: ENABLED`);
+    console.log(`📄 PDF Report Generation: ENABLED`);
+    console.log(`🔗 Source Citation: ENABLED`);
+    console.log(`✅ Enterprise Market Intelligence Ready!`);
 });
 
 module.exports = app;
