@@ -154,7 +154,7 @@ function getBrandDescription(brandName) {
     'Google': 'Google is an American multinational technology company specializing in Internet-related services and products, including search engines, cloud computing, and advertising technologies.'
   };
   
-  return descriptions[brandName] || `${brandName} is a brand/product that has gained attention in the market. Let me analyze what people are saying about it.`;
+  return descriptions[brandName] || (brandName + ' is a brand/product that has gained attention in the market. Let me analyze what people are saying about it.');
 }
 
 // Function to determine response type based on query
@@ -185,20 +185,20 @@ function createConversationalResponse(data) {
   const brand = data.brand;
   const description = getBrandDescription(brand);
   
-  let response = `**About ${brand}:**\n${description}\n\n`;
+  let response = '**About ' + brand + ':**\n' + description + '\n\n';
   
-  response += `**What People Are Saying:**\n`;
-  response += `Based on my analysis of ${data.totalMentions} mentions across social media, reviews, and news sources, `;
+  response += '**What People Are Saying:**\n';
+  response += 'Based on my analysis of ' + data.totalMentions + ' mentions across social media, reviews, and news sources, ';
   
   if (data.positive > 70) {
-    response += `${brand} enjoys very positive sentiment (${data.positive}%) among consumers. `;
+    response += brand + ' enjoys very positive sentiment (' + data.positive + '%) among consumers. ';
   } else if (data.positive > 50) {
-    response += `${brand} has generally positive sentiment (${data.positive}%) with some mixed opinions. `;
+    response += brand + ' has generally positive sentiment (' + data.positive + '%) with some mixed opinions. ';
   } else {
-    response += `${brand} shows mixed sentiment (${data.positive}% positive) with areas for improvement. `;
+    response += brand + ' shows mixed sentiment (' + data.positive + '% positive) with areas for improvement. ';
   }
   
-  response += `The main conversation themes include ${data.sources[0].themes.join(', ')}.`;
+  response += 'The main conversation themes include ' + data.sources[0].themes.join(', ') + '.';
   
   response += `\n\n**Key Insights:**\n`;
   data.insights.forEach(insight => {
@@ -206,24 +206,24 @@ function createConversationalResponse(data) {
   });
   
   response += `\n\n**Would you like me to:**\n`;
-  response += `🔍 <button onclick="requestFormat('detailed research report')" style="background:#007bff;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Generate detailed report</button>\n`;
-  response += `📊 <button onclick="requestFormat('visual sentiment breakdown')" style="background:#28a745;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Show visual dashboard</button>\n`;
-  response += `📈 <button onclick="requestFormat('strategic recommendations')" style="background:#17a2b8;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Get recommendations</button>\n`;
-  response += `💬 <button onclick="requestFormat('conversational analysis')" style="background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Discuss insights</button>\n\n`;
-  response += `Or just ask me anything specific about ${brand}!`;
+  response += '<button onclick="requestFormat(\'detailed research report\')" style="background:#007bff;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Generate detailed report</button>\n';
+  response += '<button onclick="requestFormat(\'visual sentiment breakdown\')" style="background:#28a745;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Show visual dashboard</button>\n';
+  response += '<button onclick="requestFormat(\'strategic recommendations\')" style="background:#17a2b8;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Get recommendations</button>\n';
+  response += '<button onclick="requestFormat(\'conversational analysis\')" style="background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Discuss insights</button>\n\n';
+  response += 'Or just ask me anything specific about ' + brand + '!';
   
 // Function to create executive summary
 function createExecutiveSummary(data) {
   const brand = data.brand;
   const description = getBrandDescription(brand);
   
-  let response = `**Executive Summary: ${brand}**\n\n`;
-  response += `**Company Overview:** ${description}\n\n`;
+  let response = '**Executive Summary: ' + brand + '**\n\n';
+  response += '**Company Overview:** ' + description + '\n\n';
   
-  response += `**Key Findings:**\n`;
-  response += `• Overall sentiment: ${data.positive}% positive (${data.totalMentions} total mentions)\n`;
-  response += `• Primary sentiment drivers: ${data.sources[0].themes.join(', ')}\n`;
-  response += `• Market position: ${data.positive > 75 ? 'Strong positive' : data.positive > 60 ? 'Moderately positive' : 'Mixed'} consumer perception\n\n`;
+  response += '**Key Findings:**\n';
+  response += '• Overall sentiment: ' + data.positive + '% positive (' + data.totalMentions + ' total mentions)\n';
+  response += '• Primary sentiment drivers: ' + data.sources[0].themes.join(', ') + '\n';
+  response += '• Market position: ' + (data.positive > 75 ? 'Strong positive' : data.positive > 60 ? 'Moderately positive' : 'Mixed') + ' consumer perception\n\n';
   
   response += `**Strategic Implications:**\n`;
   data.recommendations.slice(0, 2).forEach(rec => {
@@ -239,13 +239,13 @@ function createExecutiveSummary(data) {
 function createBulletPointAnalysis(data) {
   const brand = data.brand;
   
-  let response = `**${brand} - Quick Analysis**\n\n`;
+  let response = '**' + brand + ' - Quick Analysis**\n\n';
   
-  response += `**📊 Sentiment Breakdown:**\n`;
-  response += `• Positive: ${data.positive}%\n`;
-  response += `• Neutral: ${data.neutral}%\n`;
-  response += `• Negative: ${data.negative}%\n`;
-  response += `• Total mentions: ${data.totalMentions}\n\n`;
+  response += '**📊 Sentiment Breakdown:**\n';
+  response += '• Positive: ' + data.positive + '%\n';
+  response += '• Neutral: ' + data.neutral + '%\n';
+  response += '• Negative: ' + data.negative + '%\n';
+  response += '• Total mentions: ' + data.totalMentions + '\n\n';
   
   response += `**🌐 Top Sources:**\n`;
   data.sources.forEach(source => {
@@ -272,21 +272,21 @@ function createAnalysisOptionsResponse(data) {
   const brand = data.brand;
   const description = getBrandDescription(brand);
   
-  let response = `**${brand} Overview:**\n${description}\n\n`;
+  let response = '**' + brand + ' Overview:**\n' + description + '\n\n';
   
-  response += `I can provide different types of analysis for ${brand}. What would you prefer?\n\n`;
+  response += 'I can provide different types of analysis for ' + brand + '. What would you prefer?\n\n';
   
-  response += `<button onclick="requestFormat('quick sentiment summary')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Quick Sentiment Summary</button> `;
-  response += `<button onclick="requestFormat('detailed research report')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📋 Detailed Research Report</button>\n`;
-  response += `<button onclick="requestFormat('conversational analysis')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">💬 Conversational Analysis</button> `;
-  response += `<button onclick="requestFormat('visual dashboard')" style="background:#6f42c1;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📈 Visual Dashboard</button>\n\n`;
+  response += '<button onclick="requestFormat(\'quick sentiment summary\')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Quick Sentiment Summary</button> ';
+  response += '<button onclick="requestFormat(\'detailed research report\')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📋 Detailed Research Report</button>\n';
+  response += '<button onclick="requestFormat(\'conversational analysis\')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">💬 Conversational Analysis</button> ';
+  response += '<button onclick="requestFormat(\'visual dashboard\')" style="background:#6f42c1;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📈 Visual Dashboard</button>\n\n';
   
-  response += `**Custom Formats:**\n`;
-  response += `<button onclick="requestFormat('executive summary')" style="background:#fd7e14;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Executive Summary</button> `;
-  response += `<button onclick="requestFormat('bullet points')" style="background:#20c997;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Bullet Points</button> `;
-  response += `<button onclick="requestFormat('narrative style')" style="background:#e83e8c;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Narrative Style</button>\n\n`;
+  response += '**Custom Formats:**\n';
+  response += '<button onclick="requestFormat(\'executive summary\')" style="background:#fd7e14;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Executive Summary</button> ';
+  response += '<button onclick="requestFormat(\'bullet points\')" style="background:#20c997;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Bullet Points</button> ';
+  response += '<button onclick="requestFormat(\'narrative style\')" style="background:#e83e8c;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Narrative Style</button>\n\n';
   
-  response += `What type of analysis and format would work best for you?`;
+  response += 'What type of analysis and format would work best for you?';
   
   return response;
 }
@@ -296,17 +296,17 @@ function createBrandContextResponse(data) {
   const brand = data.brand;
   const description = getBrandDescription(brand);
   
-  let response = `**${brand}**\n${description}\n\n`;
+  let response = '**' + brand + '**\n' + description + '\n\n';
   
-  response += `**Current Market Sentiment:** ${data.positive}% positive sentiment from ${data.totalMentions} mentions\n\n`;
+  response += '**Current Market Sentiment:** ' + data.positive + '% positive sentiment from ' + data.totalMentions + ' mentions\n\n';
   
-  response += `I can help you understand ${brand} better. What specifically interests you?\n\n`;
-  response += `<button onclick="quickAnalysis('${brand}', 'brand')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🏢 Brand Analysis</button> `;
-  response += `<button onclick="quickAnalysis('${brand}', 'customer sentiment')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">👥 Customer Sentiment</button>\n`;
-  response += `<button onclick="quickAnalysis('${brand}', 'market performance')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Market Performance</button> `;
-  response += `<button onclick="requestFormat('full analysis')" style="background:#dc3545;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🔍 Full Analysis</button>\n\n`;
+  response += 'I can help you understand ' + brand + ' better. What specifically interests you?\n\n';
+  response += '<button onclick="quickAnalysis(\'' + brand + '\', \'brand\')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🏢 Brand Analysis</button> ';
+  response += '<button onclick="quickAnalysis(\'' + brand + '\', \'customer sentiment\')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">👥 Customer Sentiment</button>\n';
+  response += '<button onclick="quickAnalysis(\'' + brand + '\', \'market performance\')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Market Performance</button> ';
+  response += '<button onclick="requestFormat(\'full analysis\')" style="background:#dc3545;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🔍 Full Analysis</button>\n\n';
   
-  response += `Just ask me about any aspect that interests you, or say "full analysis" for a complete report!`;
+  response += 'Or just ask me anything specific about ' + brand + '!';
   
   return response;
 }
@@ -376,7 +376,7 @@ function generateInsights(brand, responseType, sentiment) {
   const insights = [];
   
   if (responseType === 'conversational' || responseType === 'brand_context') {
-    insights.push(`${brand} shows ${sentiment > 75 ? 'excellent' : sentiment > 60 ? 'good' : 'mixed'} market sentiment across digital platforms`);
+    insights.push(brand + ' shows ' + (sentiment > 75 ? 'excellent' : sentiment > 60 ? 'good' : 'mixed') + ' market sentiment across digital platforms');
     insights.push('Consumer discussions indicate strong brand recognition and engagement');
     insights.push('Social media presence drives significant portion of brand conversations');
   } else if (responseType === 'analysis_options') {
@@ -982,7 +982,7 @@ app.get('/', (req, res) => {
         function quickAnalysis(brand, type) {
             console.log('Quick analysis for:', brand, type);
             const input = document.getElementById('messageInput');
-            input.value = `${type} analysis for ${brand}`;
+            input.value = type + ' analysis for ' + brand;
             sendMessage();
         }
 
