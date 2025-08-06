@@ -29,7 +29,7 @@ const upload = multer({
 
 // Main chat interface
 app.get('/', (req, res) => {
-  const html = `<!DOCTYPE html>
+  res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -205,153 +205,6 @@ app.get('/', (req, res) => {
             background: #0056b3;
         }
 
-        .intelligence-report {
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        .report-header h2 {
-            color: #28a745;
-            margin-bottom: 15px;
-            font-size: 18px;
-        }
-
-        .sentiment-section {
-            margin-bottom: 20px;
-        }
-
-        .sentiment-section h3 {
-            color: #495057;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-
-        .sentiment-bar {
-            margin-bottom: 8px;
-        }
-
-        .sentiment-label {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 4px;
-        }
-
-        .progress-bar {
-            background: #e9ecef;
-            border-radius: 10px;
-            height: 8px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            transition: width 0.3s ease;
-        }
-
-        .progress-fill.positive {
-            background: #28a745;
-        }
-
-        .progress-fill.neutral {
-            background: #ffc107;
-        }
-
-        .progress-fill.negative {
-            background: #dc3545;
-        }
-
-        .total-mentions {
-            margin-top: 10px;
-            font-weight: 500;
-            color: #495057;
-        }
-
-        .sources-section {
-            margin-bottom: 20px;
-        }
-
-        .sources-section h3 {
-            color: #495057;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-
-        .sources-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 10px;
-        }
-
-        .source-card {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            padding: 12px;
-        }
-
-        .source-platform {
-            font-weight: 500;
-            margin-bottom: 5px;
-        }
-
-        .source-mentions {
-            color: #6c757d;
-            margin-bottom: 8px;
-        }
-
-        .source-link {
-            display: inline-block;
-            background: #007bff;
-            color: white;
-            text-decoration: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-
-        .source-link:hover {
-            background: #0056b3;
-        }
-
-        .insights-section, .recommendations-section {
-            margin-bottom: 20px;
-        }
-
-        .insights-section h3, .recommendations-section h3 {
-            color: #495057;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-
-        .insights-list, .recommendations-list {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .insights-list li, .recommendations-list li {
-            margin-bottom: 5px;
-            color: #495057;
-        }
-
-        .report-actions {
-            text-align: center;
-            margin-top: 20px;
-        }
-
-        .download-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .download-btn:hover {
-            background: #218838;
-        }
-
         .typing-indicator {
             display: none;
             color: #6c757d;
@@ -364,10 +217,6 @@ app.get('/', (req, res) => {
                 height: 100vh;
                 border-radius: 0;
             }
-            
-            .sources-grid {
-                grid-template-columns: 1fr;
-            }
         }
     </style>
 </head>
@@ -375,7 +224,7 @@ app.get('/', (req, res) => {
     <div class="chat-container">
         <div class="chat-header">
             <h1>InsightEar GPT</h1>
-            <p>Market Intelligence Platform</p>
+            <p>Real-Time Market Intelligence Platform</p>
         </div>
         
         <div class="welcome-message">
@@ -393,7 +242,7 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="chat-messages" id="chatMessages">
-            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is thinking...</div>
+            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is researching...</div>
         </div>
         
         <div class="chat-input-container">
@@ -402,7 +251,7 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Ask for real-time market analysis: 'Analyze Nike brand sentiment' or chat about anything...">
+                <input type="text" id="messageInput" placeholder="Ask for real-time market analysis or chat about anything...">
                 <button id="sendButton">➤</button>
             </div>
         </div>
@@ -463,7 +312,7 @@ app.get('/', (req, res) => {
                 }
                 
                 const data = await response.json();
-                console.log('Response data:', data);
+                console.log('Response data received');
                 
                 hideTyping();
                 addMessage('assistant', data.response);
@@ -474,40 +323,47 @@ app.get('/', (req, res) => {
             }
         }
 
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
+        // Set up all event listeners when page loads
+        window.addEventListener('load', function() {
+            console.log('Page loaded, setting up event listeners...');
+            
+            // Message input enter key
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                messageInput.addEventListener('keypress', function(event) {
+                    if (event.key === 'Enter') {
+                        sendMessage();
+                    }
+                });
+                console.log('Message input listener added');
             }
-        }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
+            
+            // Send button click
+            const sendButton = document.getElementById('sendButton');
+            if (sendButton) {
+                sendButton.addEventListener('click', sendMessage);
+                console.log('Send button listener added');
             }
-        }
-
-        function downloadReport(reportId) {
-            console.log('Report download requested:', reportId);
-            alert('PDF download functionality will be implemented based on your assistant\'s report format. Your assistant can provide downloadable reports directly.');
-        }
-
-        // File upload handling
-        document.getElementById('fileInput').addEventListener('change', function(event) {
-            const files = event.target.files;
-            if (files.length > 0) {
-                const fileNames = Array.from(files).map(file => file.name).join(', ');
-                addMessage('user', '📁 Uploaded files: ' + fileNames);
-                
-                addMessage('assistant', 'Files received! I can analyze documents for sentiment, extract insights, and generate reports. What would you like me to do with these files?');
+            
+            // File upload
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', function(event) {
+                    const files = event.target.files;
+                    if (files.length > 0) {
+                        const fileNames = Array.from(files).map(file => file.name).join(', ');
+                        addMessage('user', '📁 Uploaded files: ' + fileNames);
+                        addMessage('assistant', 'Files received! I can analyze documents for sentiment and insights. What would you like me to do with these files?');
+                    }
+                });
+                console.log('File input listener added');
             }
+            
+            console.log('InsightEar GPT loaded successfully');
         });
-
-        console.log('InsightEar GPT loaded successfully');
     </script>
 </body>
-</html>`;
-  
-  res.send(html);
+</html>`);
 });
 
 // Handle chat messages - Route everything to OpenAI Assistant
@@ -517,7 +373,7 @@ app.post('/chat', async (req, res) => {
     console.log('Received message:', message);
     console.log('Routing to OpenAI Assistant for real-time analysis');
     
-    // Route ALL queries to your OpenAI Assistant (it handles intelligence vs chat)
+    // Route ALL queries to your OpenAI Assistant
     try {
       const thread = await openai.beta.threads.create();
       
@@ -533,14 +389,13 @@ app.post('/chat', async (req, res) => {
       // Wait for completion with longer timeout for web research
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       let attempts = 0;
-      const maxAttempts = 120; // Increased to 2 minutes for web crawling
+      const maxAttempts = 120; // 2 minutes for web crawling
       
       while (runStatus.status === 'in_progress' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         attempts++;
         
-        // Log progress for web research
         if (attempts % 15 === 0) {
           console.log('Assistant researching web data... attempt', attempts);
         }
@@ -551,30 +406,29 @@ app.post('/chat', async (req, res) => {
         const assistantMessage = messages.data[0];
         
         if (assistantMessage && assistantMessage.content[0]) {
-          console.log('Real-time intelligence response received from assistant');
+          console.log('Real-time intelligence response received');
           res.json({ response: assistantMessage.content[0].text.value });
         } else {
-          console.log('Assistant response empty');
-          res.json({ response: "I'm InsightEar GPT, ready to provide real-time market intelligence and analysis. What would you like to research?" });
+          res.json({ response: "I'm InsightEar GPT, ready to provide real-time market intelligence. What would you like me to research?" });
         }
       } else if (runStatus.status === 'failed') {
         console.log('Assistant run failed:', runStatus.last_error);
-        res.json({ response: "I encountered an issue while gathering real-time data. Please try your query again, or ask me about a different topic." });
+        res.json({ response: "I encountered an issue while gathering real-time data. Please try your query again." });
       } else {
-        console.log('Assistant timeout during research, status:', runStatus.status);
-        res.json({ response: "I'm still gathering real-time market data for your query. This might take a moment for comprehensive research. Please try again shortly." });
+        console.log('Assistant timeout during research');
+        res.json({ response: "I'm still gathering comprehensive real-time data. This might take a moment - please try again shortly." });
       }
     } catch (error) {
       console.error('OpenAI Assistant error:', error.message);
       
-      // Fallback to direct completion if assistant fails
+      // Fallback to direct completion
       try {
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
             {
               role: "system", 
-              content: "You are InsightEar GPT, an advanced market intelligence assistant. You provide real-time sentiment analysis, market research, and actionable insights. When users ask about brands or products, provide comprehensive analysis including sentiment data, market positioning, and strategic recommendations."
+              content: "You are InsightEar GPT, an advanced market intelligence assistant. Provide real-time sentiment analysis, market research, and actionable insights."
             },
             {
               role: "user", 
@@ -589,10 +443,10 @@ app.post('/chat', async (req, res) => {
           console.log('Fallback completion successful');
           res.json({ response: completion.choices[0].message.content });
         } else {
-          res.json({ response: "I'm InsightEar GPT, your real-time market intelligence assistant. I can analyze brands, track sentiment, and provide strategic insights. What would you like me to research?" });
+          res.json({ response: "I'm InsightEar GPT, your real-time market intelligence assistant. What would you like me to research?" });
         }
       } catch (fallbackError) {
-        console.error('Fallback completion failed:', fallbackError.message);
+        console.error('Fallback failed:', fallbackError.message);
         res.json({ response: "I'm experiencing technical difficulties. Please try your market intelligence query again." });
       }
     }
@@ -655,7 +509,7 @@ process.on('SIGINT', () => {
 app.listen(port, '0.0.0.0', () => {
   console.log('InsightEar GPT server running on port', port);
   console.log('Server bound to 0.0.0.0:' + port);
-  console.log('Ready for market intelligence!');
+  console.log('Ready for real-time market intelligence!');
 });
 
 module.exports = app;
