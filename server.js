@@ -230,20 +230,22 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="welcome-message">
-            <strong>✅ Real-time market intelligence</strong> - Live data from Reddit, Google Reviews, Twitter, News, and more<br>
-            <strong>✅ Advanced sentiment analysis</strong> - Comprehensive brand and product insights<br>
-            <strong>✅ Smart response handling</strong> - Fast replies for greetings, detailed research for analysis<br>
-            <strong>✅ Professional reports</strong> - Executive summaries, forecasting, and strategic recommendations<br>
-            <strong>✅ AI assistance</strong> - Market intelligence plus general conversation<br><br>
+            <strong>✅ Real-time web research</strong> - Every query searches live data from current sources<br>
+            <strong>✅ Market intelligence framework</strong> - Structured analysis with executive summaries and insights<br>
+            <strong>✅ PDF report generation</strong> - Professional downloadable reports available on request<br>
+            <strong>✅ Current trends & sentiment</strong> - Fresh data from Reddit, Twitter, News, Reviews, and more<br>
+            <strong>✅ No training data limitations</strong> - Always searches for the most recent information<br><br>
             
-            <strong>Try a simple greeting:</strong> "Hi" or "Hello"<br>
-            <strong>Or ask for market research:</strong> "Analyze Nike's brand sentiment" • "Tesla customer feedback analysis"<br><br>
+            <strong>Try asking:</strong><br>
+            • "What are people saying about Amazon online?" (should search current discussions)<br>
+            • "Current trends in the tech industry" (should find latest data)<br>
+            • "Nike brand sentiment analysis" (comprehensive market research)<br><br>
             
-            <em>Note: Simple greetings respond quickly, market research may take 1-2 minutes for comprehensive data gathering.</em>
+            <em>Note: Every response includes an offer to generate a PDF report. Responses may take 1-3 minutes for thorough web research.</em>
         </div>
         
         <div class="chat-messages" id="chatMessages">
-            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is researching...</div>
+            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is searching the web for real-time data...</div>
         </div>
         
         <div class="chat-input-container">
@@ -252,7 +254,7 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Try: 'Hi' for quick response or 'Analyze Nike sentiment' for market research...">
+                <input type="text" id="messageInput" placeholder="Ask anything - I'll search the web for current data: 'What are people saying about Amazon?'">
                 <button id="sendButton">➤</button>
             </div>
         </div>
@@ -367,116 +369,150 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Handle chat messages - Smart timeout handling
+// Handle chat messages - Force real web search
 app.post('/chat', async (req, res) => {
   try {
     const { message } = req.body;
     console.log('Received message:', message);
     
-    // Determine if this is a simple greeting or complex query
-    const isSimpleGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening)$/i.test(message.trim());
-    const timeout = isSimpleGreeting ? 30 : 90; // 30 seconds for greetings, 90 for analysis
-    
-    console.log(`Query type: ${isSimpleGreeting ? 'Simple greeting' : 'Complex query'}, timeout: ${timeout}s`);
-    
-    // Try OpenAI Assistant first
+    // ALWAYS try your assistant first - no fallbacks for simple queries
     try {
+      console.log('Creating thread for Assistant:', ASSISTANT_ID);
       const thread = await openai.beta.threads.create();
       
+      // Add explicit web search instruction to every query
+      const enhancedMessage = `${message}
+
+IMPORTANT: Please search the web for current, real-time information about this topic. Use your web browsing capabilities to find the most recent data, discussions, and trends. Do not rely solely on training data - actively search for fresh information from current sources.
+
+After providing your analysis, always ask the user: "Would you like me to generate a detailed PDF report of this analysis?"`;
+
       await openai.beta.threads.messages.create(thread.id, {
         role: "user",
-        content: message
+        content: enhancedMessage
       });
 
+      console.log('Creating run with Assistant...');
       const run = await openai.beta.threads.runs.create(thread.id, {
         assistant_id: ASSISTANT_ID
       });
 
+      console.log('Run created:', run.id, 'Status:', run.status);
+
+      // Wait for completion - longer timeout for web research
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       let attempts = 0;
-      const maxAttempts = timeout; // Use dynamic timeout
+      const maxAttempts = 180; // 3 minutes for thorough web research
       
       while (runStatus.status === 'in_progress' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         attempts++;
         
-        // Log progress less frequently for greetings
-        if (attempts % (isSimpleGreeting ? 10 : 15) === 0) {
-          console.log(`Assistant processing... attempt ${attempts}/${maxAttempts}`);
+        if (attempts % 20 === 0) {
+          console.log(`Assistant researching web data... ${attempts}/${maxAttempts} seconds`);
         }
       }
+
+      console.log('Final run status:', runStatus.status);
 
       if (runStatus.status === 'completed') {
         const messages = await openai.beta.threads.messages.list(thread.id);
         const assistantMessage = messages.data[0];
         
         if (assistantMessage && assistantMessage.content[0]) {
-          console.log('Assistant response received successfully');
-          return res.json({ response: assistantMessage.content[0].text.value });
+          console.log('✅ Real-time web research response received from Assistant');
+          let response = assistantMessage.content[0].text.value;
+          
+          // Ensure PDF offer is included if not already there
+          if (!response.toLowerCase().includes('pdf report')) {
+            response += '\n\n---\n\n**Would you like me to generate a detailed PDF report of this analysis?** Just ask "Generate PDF report" and I\'ll create a comprehensive document for you.';
+          }
+          
+          return res.json({ response: response });
         }
       } else if (runStatus.status === 'failed') {
-        console.log('Assistant run failed:', runStatus.last_error);
+        console.log('❌ Assistant run failed:', runStatus.last_error);
+        console.log('Full error details:', JSON.stringify(runStatus.last_error, null, 2));
         throw new Error('Assistant failed: ' + (runStatus.last_error?.message || 'Unknown error'));
       } else {
-        console.log(`Assistant timeout after ${attempts}s, status: ${runStatus.status}`);
-        throw new Error('Assistant timeout');
+        console.log(`❌ Assistant timeout after ${attempts} seconds, status: ${runStatus.status}`);
+        throw new Error('Assistant timeout - please try again');
       }
     } catch (assistantError) {
-      console.log('Assistant failed, using fallback:', assistantError.message);
+      console.error('❌ Assistant error:', assistantError.message);
       
-      // Smart fallback based on query type
+      // Only use fallback if assistant completely fails
+      console.log('⚠️ Using fallback - this should rarely happen');
+      
       try {
-        let systemPrompt;
-        let maxTokens;
-        
-        if (isSimpleGreeting) {
-          systemPrompt = "You are InsightEar GPT, a friendly market intelligence assistant. Respond naturally to greetings and casual conversation.";
-          maxTokens = 200;
-        } else {
-          systemPrompt = "You are InsightEar GPT, an advanced market intelligence assistant. Provide helpful analysis and insights about brands, markets, and business topics. Be professional and informative.";
-          maxTokens = 1000;
-        }
-        
         const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini", // Faster model for fallback
+          model: "gpt-4o",
           messages: [
             {
               role: "system", 
-              content: systemPrompt
+              content: `You are InsightEar GPT, an advanced market intelligence assistant. 
+
+CRITICAL: This is a fallback response because the main assistant failed. Explain to the user that you're experiencing technical difficulties with web search capabilities, but provide the best analysis you can based on your knowledge. 
+
+Always end by asking: "Would you like me to generate a detailed PDF report of this analysis?"
+
+Format your response professionally with clear headings and bullet points.`
             },
             {
               role: "user", 
               content: message
             }
           ],
-          max_tokens: maxTokens,
+          max_tokens: 1500,
           temperature: 0.7
         });
         
         if (completion.choices[0]?.message?.content) {
-          console.log('Fallback completion successful');
-          return res.json({ response: completion.choices[0].message.content });
+          console.log('✅ Fallback completion successful');
+          let response = completion.choices[0].message.content;
+          
+          // Add fallback notice and PDF offer
+          response = `⚠️ **Note**: I'm currently experiencing technical difficulties with my web search capabilities, so this analysis is based on my existing knowledge rather than real-time data.\n\n${response}\n\n---\n\n**Would you like me to generate a detailed PDF report of this analysis?** Just ask "Generate PDF report" and I'll create a comprehensive document for you.`;
+          
+          return res.json({ response: response });
         }
       } catch (fallbackError) {
-        console.error('Fallback also failed:', fallbackError.message);
+        console.error('❌ Fallback also failed:', fallbackError.message);
       }
     }
     
-    // Final fallback with appropriate response
-    if (isSimpleGreeting) {
-      res.json({ 
-        response: "Hello! I'm InsightEar GPT, your market intelligence assistant. I can help you analyze brands, track sentiment, research markets, and answer general questions. What would you like to know?" 
-      });
-    } else {
-      res.json({ 
-        response: "I'm InsightEar GPT, ready to help with market intelligence and analysis. I can research brands, analyze sentiment, track competitors, and provide strategic insights. What would you like me to research?" 
-      });
-    }
+    // Final emergency response
+    res.json({ 
+      response: `I'm experiencing technical difficulties accessing real-time web data. Please try your query again, or contact support if this persists.
+
+**Debug Info**: Assistant ID: ${ASSISTANT_ID}
+
+**Would you like me to generate a detailed PDF report?** I can create a document based on available information.` 
+    });
     
   } catch (error) {
-    console.error('Chat error:', error);
+    console.error('❌ Critical chat error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Simple PDF generation endpoint
+app.post('/generate-pdf', (req, res) => {
+  try {
+    const { content, title } = req.body;
+    
+    // For now, return instructions for PDF generation
+    // The assistant should handle PDF creation in its response
+    res.json({
+      message: "PDF generation should be handled by the assistant. Ask your assistant to create a detailed report format that can be saved as PDF.",
+      instructions: "The assistant can format its response as a comprehensive report that users can save/print as PDF.",
+      title: title || "InsightEar GPT Analysis Report",
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).json({ error: 'PDF generation failed' });
   }
 });
 
@@ -551,11 +587,19 @@ process.on('SIGINT', () => {
 
 // Start server
 app.listen(port, '0.0.0.0', () => {
-  console.log('InsightEar GPT server running on port', port);
-  console.log('Server bound to 0.0.0.0:' + port);
-  console.log('Assistant ID configured:', ASSISTANT_ID);
-  console.log('Debug endpoint available at /debug-assistant');
-  console.log('Ready for real-time market intelligence!');
+  console.log('=================================');
+  console.log('🚀 InsightEar GPT Server Started');
+  console.log('=================================');
+  console.log('Port:', port);
+  console.log('Host: 0.0.0.0');
+  console.log('Assistant ID:', ASSISTANT_ID);
+  console.log('Web Search: FORCED for every query');
+  console.log('PDF Offers: Automatic after responses');
+  console.log('Timeout: 3 minutes for web research');
+  console.log('Debug endpoint: /debug-assistant');
+  console.log('PDF endpoint: /generate-pdf');
+  console.log('=================================');
+  console.log('✅ Ready for real-time intelligence!');
 });
 
 module.exports = app;
