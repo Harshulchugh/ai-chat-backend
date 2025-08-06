@@ -402,8 +402,8 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Ask for real-time market analysis: 'Analyze Nike brand sentiment' or chat about anything..." onkeypress="handleKeyPress(event)">
-                <button id="sendButton" onclick="sendMessage()">➤</button>
+                <input type="text" id="messageInput" placeholder="Ask for real-time market analysis: 'Analyze Nike brand sentiment' or chat about anything...">
+                <button id="sendButton">➤</button>
             </div>
         </div>
     </div>
