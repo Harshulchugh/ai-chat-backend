@@ -5,881 +5,968 @@ const cors = require('cors');
 const PDFDocument = require('pdfkit');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
 
+// Configure OpenAI
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY
 });
 
-const ASSISTANT_ID = process.env.ASSISTANT_ID;
+const ASSISTANT_ID = process.env.ASSISTANT_ID || 'asst_2P5fw8JmadtFqerm6hcVkC5I';
 
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
+// Configure multer for file uploads - Memory optimized
 const upload = multer({
-    limits: { fileSize: 10 * 1024 * 1024 },
-    storage: multer.memoryStorage()
+  storage: multer.memoryStorage(),
+  limits: { 
+    fileSize: 5 * 1024 * 1024, // Reduced to 5MB limit
+    files: 3 // Limit number of files
+  }
 });
 
-const reports = new Map();
+// Intelligence keywords for market research
+const INTELLIGENCE_KEYWORDS = [
+  // Brand Research
+  'brand', 'reputation', 'image', 'perception', 'trust', 'credibility', 'equity', 'positioning', 'awareness', 'recognition',
+  // Consumer Insights
+  'sentiment', 'think', 'feel', 'opinion', 'saying', 'people', 'customers', 'users', 'consumers', 'audience',
+  // Market Research
+  'analysis', 'insights', 'research', 'market', 'trends', 'performance', 'growth', 'share', 'competitive',
+  // Product Research
+  'product', 'quality', 'features', 'benefits', 'performance', 'usability', 'design', 'innovation', 'effectiveness',
+  // Customer Experience
+  'satisfaction', 'experience', 'service', 'support', 'journey', 'feedback', 'reviews', 'ratings', 'complaints',
+  // Social Listening
+  'buzz', 'mentions', 'social', 'viral', 'trending', 'conversation', 'chatter', 'discussion', 'talking',
+  // Behavioral Research
+  'behavior', 'purchase', 'buying', 'loyalty', 'retention', 'advocacy', 'recommendation', 'word-of-mouth',
+  // Competitive Intelligence
+  'comparison', 'versus', 'vs', 'compete', 'competitor', 'alternative', 'benchmark', 'industry'
+];
 
-function generateIntelligence(query) {
-    const positive = Math.floor(Math.random() * 15) + 70;
-    const neutral = Math.floor(Math.random() * 15) + 15;
-    const negative = 100 - positive - neutral;
-    const mentions = Math.floor(Math.random() * 200) + 300;
-    
-    // Detect research intent and customize insights
-    const queryLower = query.toLowerCase();
-    let researchType = 'general';
-    let insights = [];
-    let recommendations = [];
-    
-    // Brand Research
-    if (queryLower.includes('brand') || queryLower.includes('reputation') || queryLower.includes('image')) {
-        researchType = 'brand';
-        insights = [
-            `Strong brand equity with ${positive}% positive sentiment across platforms`,
-            'Brand recognition significantly above industry benchmarks',
-            'Trust and credibility metrics show consistent upward trajectory',
-            'Brand differentiation clearly resonates with target demographics'
-        ];
-        recommendations = [
-            'Leverage positive brand perception in premium positioning strategy',
-            'Expand brand awareness campaigns in underperforming segments',
-            'Strengthen brand storytelling to maintain emotional connection',
-            'Monitor competitive brand positioning for defensive strategies'
-        ];
-    }
-    // Product Research
-    else if (queryLower.includes('product') || queryLower.includes('quality') || queryLower.includes('features')) {
-        researchType = 'product';
-        insights = [
-            'Product quality perception drives majority of positive sentiment',
-            'Feature satisfaction rates exceed category averages by 15%',
-            'Innovation perception positions product as market leader',
-            'User experience feedback indicates strong product-market fit'
-        ];
-        recommendations = [
-            'Highlight quality advantages in competitive messaging',
-            'Invest in feature enhancements based on user feedback',
-            'Develop innovation roadmap to maintain leadership position',
-            'Create product education content to drive adoption'
-        ];
-    }
-    // Customer Experience
-    else if (queryLower.includes('experience') || queryLower.includes('satisfaction') || queryLower.includes('service')) {
-        researchType = 'experience';
-        insights = [
-            'Customer satisfaction scores trending 12% above industry average',
-            'Service touchpoints show consistent positive feedback patterns',
-            'Customer journey analysis reveals strong retention indicators',
-            'Support interactions drive significant loyalty improvements'
-        ];
-        recommendations = [
-            'Scale successful service practices across all touchpoints',
-            'Implement proactive customer success programs',
-            'Enhance digital experience based on user behavior data',
-            'Develop customer advocacy programs to amplify satisfaction'
-        ];
-    }
-    // Competitive Analysis
-    else if (queryLower.includes('vs') || queryLower.includes('compar') || queryLower.includes('compet')) {
-        researchType = 'competitive';
-        insights = [
-            'Competitive sentiment analysis shows 23% advantage over nearest rival',
-            'Share of voice metrics indicate growing market presence',
-            'Differentiation factors clearly recognized by consumers',
-            'Competitive switching patterns favor current positioning'
-        ];
-        recommendations = [
-            'Amplify competitive advantages in marketing communications',
-            'Monitor competitor moves for strategic response opportunities',
-            'Strengthen barriers to switching through loyalty programs',
-            'Capitalize on competitor weaknesses in messaging strategy'
-        ];
-    }
-    // General Sentiment
-    else {
-        researchType = 'sentiment';
-        insights = [
-            `Strong consumer sentiment with ${positive}% positive mentions`,
-            'Social conversation trends show increasing engagement',
-            'Word-of-mouth indicators suggest organic growth potential',
-            'Consumer advocacy metrics above category benchmarks'
-        ];
-        recommendations = [
-            'Leverage positive sentiment in content marketing strategy',
-            'Amplify user-generated content and testimonials',
-            'Engage with brand advocates to expand reach',
-            'Monitor sentiment shifts for early trend detection'
-        ];
-    }
-    
-    // Generate real source URLs
-    const encodedQuery = encodeURIComponent(query);
-    const sources = [
-        {
-            platform: "Reddit",
-            mentions: Math.floor(Math.random() * 80) + 60,
-            sentiment: "positive",
-            url: `https://www.reddit.com/search/?q=${encodedQuery}`,
-            icon: "📱",
-            themes: researchType === 'brand' ? 'brand perception, trust' : 
-                   researchType === 'product' ? 'quality, features' :
-                   researchType === 'experience' ? 'satisfaction, service' :
-                   researchType === 'competitive' ? 'comparisons, preferences' :
-                   'general sentiment, recommendations'
-        },
-        {
-            platform: "Product Reviews",
-            mentions: Math.floor(Math.random() * 120) + 100,
-            sentiment: "positive",
-            url: `https://www.google.com/search?q=${encodedQuery}+reviews`,
-            icon: "⭐",
-            themes: researchType === 'product' ? 'functionality, value' :
-                   researchType === 'experience' ? 'user experience, support' :
-                   'overall satisfaction, recommendations'
-        },
-        {
-            platform: "Social Media",
-            mentions: Math.floor(Math.random() * 100) + 70,
-            sentiment: "mixed",
-            url: `https://twitter.com/search?q=${encodedQuery}`,
-            icon: "📢",
-            themes: researchType === 'brand' ? 'brand awareness, buzz' :
-                   researchType === 'competitive' ? 'comparisons, trends' :
-                   'conversations, viral content'
-        },
-        {
-            platform: "News & Media",
-            mentions: Math.floor(Math.random() * 40) + 20,
-            sentiment: "neutral",
-            url: `https://news.google.com/search?q=${encodedQuery}`,
-            icon: "📰",
-            themes: researchType === 'competitive' ? 'market analysis, industry' :
-                   researchType === 'brand' ? 'PR coverage, announcements' :
-                   'industry coverage, trends'
-        }
-    ];
-    
-    return {
-        query: query,
-        positive: positive,
-        neutral: neutral,
-        negative: negative,
-        mentions: mentions,
-        sources: sources,
-        insights: insights,
-        recommendations: recommendations,
-        researchType: researchType,
-        reportId: 'RPT-' + Date.now(),
-        timestamp: new Date().toISOString()
-    };
+// Function to check if query needs intelligence analysis
+function needsIntelligence(query) {
+  const lowerQuery = query.toLowerCase();
+  return INTELLIGENCE_KEYWORDS.some(keyword => lowerQuery.includes(keyword));
 }
 
+// Function to extract brand/product from query
+function extractBrand(query) {
+  // Remove common intelligence keywords to isolate brand name
+  let brand = query.toLowerCase();
+  const removeWords = ['what', 'are', 'people', 'saying', 'about', 'brand', 'sentiment', 'analysis', 'of', 'the', 'how', 'is', 'do', 'customers', 'think'];
+  
+  removeWords.forEach(word => {
+    brand = brand.replace(new RegExp('\\b' + word + '\\b', 'g'), '');
+  });
+  
+  return brand.trim().replace(/\s+/g, ' ');
+}
+
+// Function to determine research type
+function getResearchType(query) {
+  const lowerQuery = query.toLowerCase();
+  
+  if (lowerQuery.includes('brand') || lowerQuery.includes('reputation') || lowerQuery.includes('image')) {
+    return 'Brand Research';
+  }
+  if (lowerQuery.includes('product') || lowerQuery.includes('quality') || lowerQuery.includes('features')) {
+    return 'Product Research';
+  }
+  if (lowerQuery.includes('satisfaction') || lowerQuery.includes('experience') || lowerQuery.includes('service')) {
+    return 'Customer Experience';
+  }
+  if (lowerQuery.includes('vs') || lowerQuery.includes('versus') || lowerQuery.includes('comparison')) {
+    return 'Competitive Intelligence';
+  }
+  if (lowerQuery.includes('loyalty') || lowerQuery.includes('purchase') || lowerQuery.includes('buying')) {
+    return 'Consumer Behavior';
+  }
+  return 'Market Intelligence';
+}
+
+// Function to generate mock intelligence data
+function generateIntelligenceData(query) {
+  const brand = extractBrand(query);
+  const researchType = getResearchType(query);
+  
+  // Generate realistic but varied data
+  const basePositive = 65 + Math.floor(Math.random() * 20);
+  const baseNeutral = Math.floor(Math.random() * 20) + 10;
+  const baseNegative = 100 - basePositive - baseNeutral;
+  
+  const totalMentions = Math.floor(Math.random() * 500) + 200;
+  const redditMentions = Math.floor(totalMentions * 0.25);
+  const reviewMentions = Math.floor(totalMentions * 0.4);
+  const socialMentions = Math.floor(totalMentions * 0.25);
+  const newsMentions = totalMentions - redditMentions - reviewMentions - socialMentions;
+
+  return {
+    query: query,
+    brand: brand,
+    researchType: researchType,
+    positive: basePositive,
+    neutral: baseNeutral,
+    negative: baseNegative,
+    totalMentions: totalMentions,
+    sources: [
+      {
+        platform: 'Reddit',
+        mentions: redditMentions,
+        sentiment: 'positive',
+        url: 'https://www.reddit.com/search/?q=' + encodeURIComponent(brand),
+        themes: ['brand perception', 'user discussions']
+      },
+      {
+        platform: 'Product Reviews',
+        mentions: reviewMentions,
+        sentiment: 'positive',
+        url: 'https://www.google.com/search?q=' + encodeURIComponent(brand + ' reviews'),
+        themes: ['satisfaction', 'recommendations']
+      },
+      {
+        platform: 'Social Media',
+        mentions: socialMentions,
+        sentiment: 'mixed',
+        url: 'https://twitter.com/search?q=' + encodeURIComponent(brand),
+        themes: ['brand awareness', 'social buzz']
+      },
+      {
+        platform: 'News & Media',
+        mentions: newsMentions,
+        sentiment: 'neutral',
+        url: 'https://news.google.com/search?q=' + encodeURIComponent(brand),
+        themes: ['PR coverage', 'announcements']
+      }
+    ],
+    insights: generateInsights(brand, researchType, basePositive),
+    recommendations: generateRecommendations(brand, researchType, basePositive),
+    reportId: Date.now().toString()
+  };
+}
+
+// Function to generate insights based on research type
+function generateInsights(brand, researchType, sentiment) {
+  const insights = [];
+  
+  if (researchType === 'Brand Research') {
+    insights.push('Strong brand equity with ' + sentiment + '% positive sentiment across platforms');
+    insights.push('Brand recognition significantly above industry benchmarks');
+    insights.push('Trust and credibility metrics show consistent upward trajectory');
+  } else if (researchType === 'Product Research') {
+    insights.push('Product quality ratings exceed customer expectations');
+    insights.push('Feature satisfaction scores above industry average');
+    insights.push('Innovation perception drives positive sentiment');
+  } else if (researchType === 'Customer Experience') {
+    insights.push('Customer satisfaction levels trending upward');
+    insights.push('Service quality recognized as key differentiator');
+    insights.push('Customer journey optimization showing positive impact');
+  } else if (researchType === 'Competitive Intelligence') {
+    insights.push('Market positioning strength relative to competitors');
+    insights.push('Differentiation strategy resonating with target audience');
+    insights.push('Competitive advantages clearly perceived by consumers');
+  } else {
+    insights.push('Overall market sentiment trending positive');
+    insights.push('Brand mentions showing consistent growth');
+    insights.push('Consumer engagement levels above industry benchmarks');
+  }
+  
+  return insights;
+}
+
+// Function to generate recommendations
+function generateRecommendations(brand, researchType, sentiment) {
+  const recommendations = [];
+  
+  if (sentiment > 75) {
+    recommendations.push('Leverage positive sentiment in marketing campaigns');
+    recommendations.push('Expand into new market segments while maintaining quality');
+    recommendations.push('Develop brand advocacy programs to amplify positive word-of-mouth');
+  } else if (sentiment > 60) {
+    recommendations.push('Focus on addressing neutral sentiment segments');
+    recommendations.push('Enhance customer experience at key touchpoints');
+    recommendations.push('Strengthen brand messaging for better differentiation');
+  } else {
+    recommendations.push('Implement reputation management strategy');
+    recommendations.push('Address core issues causing negative sentiment');
+    recommendations.push('Develop crisis communication plan for brand recovery');
+  }
+  
+  return recommendations;
+}
+
+// Function to create HTML for intelligence display
+function createIntelligenceHTML(data) {
+  let html = '<div class="intelligence-report">';
+  
+  // Header
+  html += '<div class="report-header">';
+  html += '<h2>📊 ' + data.brand + ' - ' + data.researchType + '</h2>';
+  html += '</div>';
+  
+  // Sentiment Overview
+  html += '<div class="sentiment-section">';
+  html += '<h3>💖 Sentiment Overview</h3>';
+  html += '<div class="sentiment-bars">';
+  
+  // Positive bar
+  html += '<div class="sentiment-bar">';
+  html += '<span class="sentiment-label">[' + data.positive + '%] Positive</span>';
+  html += '<div class="progress-bar">';
+  html += '<div class="progress-fill positive" style="width: ' + data.positive + '%"></div>';
+  html += '</div>';
+  html += '</div>';
+  
+  // Neutral bar
+  html += '<div class="sentiment-bar">';
+  html += '<span class="sentiment-label">[' + data.neutral + '%] Neutral</span>';
+  html += '<div class="progress-bar">';
+  html += '<div class="progress-fill neutral" style="width: ' + data.neutral + '%"></div>';
+  html += '</div>';
+  html += '</div>';
+  
+  // Negative bar
+  html += '<div class="sentiment-bar">';
+  html += '<span class="sentiment-label">[' + data.negative + '%] Negative</span>';
+  html += '<div class="progress-bar">';
+  html += '<div class="progress-fill negative" style="width: ' + data.negative + '%"></div>';
+  html += '</div>';
+  html += '</div>';
+  
+  html += '<div class="total-mentions">[' + data.totalMentions + '] Total Mentions</div>';
+  html += '</div>';
+  html += '</div>';
+  
+  // Data Sources
+  html += '<div class="sources-section">';
+  html += '<h3>🌐 Data Sources</h3>';
+  html += '<div class="sources-grid">';
+  
+  data.sources.forEach(function(source, index) {
+    html += '<div class="source-card">';
+    html += '<div class="source-platform">📱 <strong>' + source.platform + '</strong></div>';
+    html += '<div class="source-mentions">' + source.mentions + ' mentions</div>';
+    html += '<div class="source-themes">Themes: ' + source.themes.join(', ') + '</div>';
+    html += '<a href="' + source.url + '" target="_blank" class="source-link">View Source</a>';
+    html += '</div>';
+  });
+  
+  html += '</div>';
+  html += '</div>';
+  
+  // Research Insights
+  html += '<div class="insights-section">';
+  html += '<h3>🔍 Research Insights</h3>';
+  html += '<ul class="insights-list">';
+  data.insights.forEach(function(insight) {
+    html += '<li>- ' + insight + '</li>';
+  });
+  html += '</ul>';
+  html += '</div>';
+  
+  // Strategic Recommendations
+  html += '<div class="recommendations-section">';
+  html += '<h3>💡 Strategic Recommendations</h3>';
+  html += '<ul class="recommendations-list">';
+  data.recommendations.forEach(function(rec) {
+    html += '<li>→ ' + rec + '</li>';
+  });
+  html += '</ul>';
+  html += '</div>';
+  
+  // PDF Download
+  html += '<div class="report-actions">';
+  html += '<button class="download-btn" onclick="downloadReport(\'' + data.reportId + '\')">📄 Download PDF Report</button>';
+  html += '</div>';
+  
+  html += '</div>';
+  
+  return html;
+}
+
+// Route: Main chat interface
 app.get('/', (req, res) => {
-    const html = `<!DOCTYPE html>
-<html>
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>InsightEar GPT</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 20px;
         }
-        .container {
-            width: 400px;
-            height: 600px;
+
+        .chat-container {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            height: 700px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
-        .header {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+
+        .chat-header {
+            background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
             color: white;
             padding: 20px;
             text-align: center;
         }
-        .title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-        .subtitle { font-size: 12px; opacity: 0.9; }
-        .messages {
+
+        .chat-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .welcome-message {
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            padding: 15px 20px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .welcome-message strong {
+            color: #28a745;
+        }
+
+        .chat-messages {
             flex: 1;
-            padding: 20px;
             overflow-y: auto;
+            padding: 20px;
             background: #f8f9fa;
         }
+
         .message {
             margin-bottom: 15px;
-            padding: 12px 15px;
-            border-radius: 15px;
-            max-width: 85%;
-            font-size: 14px;
-            line-height: 1.4;
+            display: flex;
+            gap: 10px;
         }
-        .user {
-            background: #1e3c72;
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.assistant {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: #007bff;
             color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 4px;
         }
-        .bot {
+
+        .message.assistant .message-content {
             background: white;
             color: #333;
-            border: 1px solid #e2e8f0;
-            border-bottom-left-radius: 4px;
+            border: 1px solid #e9ecef;
         }
-        .welcome {
-            background: #f0f7ff;
-            border: 2px dashed #b3d7ff;
-            border-radius: 12px;
-            padding: 18px;
-            text-align: center;
-            color: #1e3c72;
-            margin-bottom: 15px;
-        }
-        .input-area {
+
+        .chat-input-container {
             padding: 20px;
             background: white;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .input-group {
             display: flex;
             gap: 10px;
             align-items: center;
         }
-        .file-btn {
+
+        .file-upload {
+            position: relative;
+        }
+
+        .file-upload input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-upload-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 50%;
             width: 40px;
             height: 40px;
-            background: #f1f5f9;
-            color: #64748b;
-            border: 2px solid #e2e8f0;
-            border-radius: 50%;
-            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            cursor: pointer;
+            font-size: 18px;
         }
-        .file-btn:hover { background: #e2e8f0; }
-        .input {
+
+        .file-upload-btn:hover {
+            background: #5a6268;
+        }
+
+        #messageInput {
             flex: 1;
-            padding: 12px 15px;
-            border: 2px solid #e2e8f0;
-            border-radius: 20px;
-            outline: none;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
             font-size: 14px;
+            outline: none;
         }
-        .input:focus { border-color: #2a5298; }
-        .send-btn {
-            width: 40px;
-            height: 40px;
-            background: #1e3c72;
+
+        #messageInput:focus {
+            border-color: #007bff;
+        }
+
+        #sendButton {
+            background: #007bff;
             color: white;
             border: none;
             border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-        }
-        .send-btn:hover { background: #2a5298; }
-        .intelligence {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 15px 0;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .intel-title {
             font-size: 16px;
-            font-weight: 600;
-            color: #1e3c72;
+        }
+
+        #sendButton:hover {
+            background: #0056b3;
+        }
+
+        /* Intelligence Report Styles */
+        .intelligence-report {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .report-header h2 {
+            color: #28a745;
             margin-bottom: 15px;
-            text-align: center;
-        }
-        .sentiment {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin: 15px 0;
-        }
-        .sentiment-card {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid #e2e8f0;
-        }
-        .percentage {
             font-size: 18px;
-            font-weight: 700;
+        }
+
+        .sentiment-section {
+            margin-bottom: 20px;
+        }
+
+        .sentiment-section h3 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .sentiment-bar {
+            margin-bottom: 8px;
+        }
+
+        .sentiment-label {
+            display: block;
+            font-weight: 500;
             margin-bottom: 4px;
         }
-        .positive { color: #10b981; }
-        .neutral { color: #f59e0b; }
-        .negative { color: #ef4444; }
-        .label {
-            font-size: 11px;
-            color: #64748b;
-            text-transform: uppercase;
-        }
-        .bar {
-            width: 100%;
+
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 10px;
             height: 8px;
-            background: #e2e8f0;
-            border-radius: 4px;
-            margin: 10px 0;
             overflow: hidden;
         }
-        .bar-fill {
+
+        .progress-fill {
             height: 100%;
-            background: #10b981;
-            border-radius: 4px;
+            transition: width 0.3s ease;
         }
-        .sources {
+
+        .progress-fill.positive {
+            background: #28a745;
+        }
+
+        .progress-fill.neutral {
+            background: #ffc107;
+        }
+
+        .progress-fill.negative {
+            background: #dc3545;
+        }
+
+        .total-mentions {
+            margin-top: 10px;
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .sources-section {
+            margin-bottom: 20px;
+        }
+
+        .sources-section h3 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .sources-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin: 15px 0;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
         }
-        .source {
+
+        .source-card {
             background: #f8f9fa;
-            padding: 8px;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 12px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px;
         }
+
+        .source-platform {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .source-mentions {
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .source-themes {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+
+        .source-link {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .source-link:hover {
+            background: #0056b3;
+        }
+
+        .insights-section, .recommendations-section {
+            margin-bottom: 20px;
+        }
+
+        .insights-section h3, .recommendations-section h3 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .insights-list, .recommendations-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .insights-list li, .recommendations-list li {
+            margin-bottom: 5px;
+            color: #495057;
+        }
+
+        .report-actions {
+            text-align: center;
+            margin-top: 20px;
+        }
+
         .download-btn {
-            background: #1e3c72;
+            background: #28a745;
             color: white;
             border: none;
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: 25px;
             cursor: pointer;
-            font-size: 12px;
-            margin-top: 15px;
-            width: 100%;
+            font-size: 14px;
         }
-        .download-btn:hover { background: #2a5298; }
-        .insight {
-            background: #f0f7ff;
-            padding: 10px;
-            border-radius: 6px;
-            margin: 10px 0;
-            font-size: 13px;
-            border-left: 4px solid #1e3c72;
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        .typing-indicator {
+            display: none;
+            color: #6c757d;
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .chat-container {
+                height: 100vh;
+                border-radius: 0;
+            }
+            
+            .sources-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="title">InsightEar GPT</div>
-            <div class="subtitle">Market Intelligence Platform</div>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>InsightEar GPT</h1>
+            <p>Market Intelligence Platform</p>
         </div>
         
-        <div class="messages" id="messages">
-            <div class="welcome">
-                <strong>Welcome to InsightEar GPT!</strong><br><br>
-                ✅ Consumer sentiment analysis<br>
-                ✅ Brand perception research<br>
-                ✅ Competitive intelligence<br>
-                ✅ Product feedback analysis<br>
-                ✅ Professional research reports<br><br>
-                <strong>Try these research examples:</strong><br>
-                "What do customers think about Nike?"<br>
-                "Tesla brand reputation analysis"<br>
-                "iPhone vs Samsung comparison"<br>
-                "Starbucks customer satisfaction"
+        <div class="welcome-message">
+            <strong>✅ Consumer sentiment analysis</strong><br>
+            <strong>✅ Brand perception research</strong><br>
+            <strong>✅ Competitive intelligence</strong><br>
+            <strong>✅ Product feedback analysis</strong><br>
+            <strong>✅ Professional research reports</strong><br><br>
+            
+            Try these research examples:<br>
+            "What do customers think about Nike?"<br>
+            "Tesla brand reputation analysis"<br>
+            "iPhone vs Samsung comparison"<br>
+            "Starbucks customer satisfaction"
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is thinking...</div>
+        </div>
+        
+        <div class="chat-input-container">
+            <div class="input-group">
+                <div class="file-upload">
+                    <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
+                    <div class="file-upload-btn">📎</div>
+                </div>
+                <input type="text" id="messageInput" placeholder="Ask about brand sentiment, market analysis, or anything else..." onkeypress="handleKeyPress(event)">
+                <button id="sendButton" onclick="sendMessage()">➤</button>
             </div>
-        </div>
-        
-        <div class="input-area">
-            <input type="file" id="fileInput" style="display: none;" accept=".pdf,.csv,.xlsx,.txt" multiple>
-            <button class="file-btn" id="fileBtn">📎</button>
-            <input type="text" class="input" id="messageInput" placeholder="Ask about brands, sentiment, analysis...">
-            <button class="send-btn" id="sendBtn">→</button>
         </div>
     </div>
 
     <script>
         console.log('InsightEar GPT starting...');
         
-        document.getElementById('fileBtn').addEventListener('click', function() {
-            document.getElementById('fileInput').click();
-        });
-        
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            var files = Array.from(e.target.files);
-            if (files.length > 0) {
-                addMessage('user', '📁 Files: ' + files.map(function(f) { return f.name; }).join(', '));
-                addMessage('bot', '✅ Files ready for analysis!');
+        function addMessage(type, content) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + type;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = content;
+            
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showTyping() {
+            document.getElementById('typingIndicator').style.display = 'block';
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+        }
+
+        function hideTyping() {
+            document.getElementById('typingIndicator').style.display = 'none';
+        }
+
+        async function sendMessage() {
+            console.log('sendMessage called');
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            console.log('Sending message:', message);
+            addMessage('user', message);
+            input.value = '';
+            
+            showTyping();
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                hideTyping();
+                addMessage('assistant', data.response);
+            } catch (error) {
+                console.error('Error:', error);
+                hideTyping();
+                addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
             }
-        });
-        
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
                 sendMessage();
             }
-        });
-        
-        document.getElementById('sendBtn').addEventListener('click', sendMessage);
-        
-        function addMessage(role, content) {
-            console.log('Adding message:', role);
-            var messages = document.getElementById('messages');
-            var div = document.createElement('div');
-            div.className = 'message ' + role;
-            div.innerHTML = content;
-            messages.appendChild(div);
-            messages.scrollTop = messages.scrollHeight;
         }
-        
-        function sendMessage() {
-            console.log('sendMessage called');
-            var input = document.getElementById('messageInput');
-            var message = input.value.trim();
-            
-            if (!message) {
-                console.log('Empty message');
-                return;
-            }
-            
-            console.log('Sending:', message);
-            input.value = '';
-            addMessage('user', message);
-            addMessage('bot', '💭 Analyzing...');
-            
-            // Comprehensive intelligence keywords (simplified for syntax safety)
-            var sentimentWords = ['sentiment', 'opinion', 'perception', 'feeling', 'attitude', 'positive', 'negative', 'neutral', 'satisfied', 'happy', 'frustrated'];
-            var brandWords = ['brand', 'reputation', 'image', 'trust', 'credibility', 'positioning', 'awareness', 'recognition'];
-            var productWords = ['product', 'quality', 'performance', 'features', 'design', 'innovation', 'usability', 'durability'];
-            var consumerWords = ['customer', 'consumer', 'purchase', 'buying', 'experience', 'loyalty', 'satisfaction', 'feedback'];
-            var marketWords = ['market', 'competition', 'competitive', 'competitor', 'trends', 'analysis', 'research', 'insights'];
-            var compareWords = ['vs', 'versus', 'compared', 'comparison', 'compare', 'better', 'worse', 'alternative'];
-            var socialWords = ['saying', 'think', 'feel', 'mention', 'buzz', 'talk', 'discussion', 'reviews'];
-            var questionWords = ['what are people saying', 'what do customers think', 'how do people feel', 'thoughts on', 'opinions about'];
-            var brandNames = ['nike', 'apple', 'samsung', 'tesla', 'starbucks', 'mcdonalds', 'amazon', 'google', 'microsoft', 'kirkland', 'new balance'];
-            
-            var allKeywords = sentimentWords.concat(brandWords, productWords, consumerWords, marketWords, compareWords, socialWords, brandNames);
-            
-            var needsIntel = false;
-            for (var i = 0; i < allKeywords.length; i++) {
-                if (message.toLowerCase().includes(allKeywords[i])) {
-                    needsIntel = true;
-                    break;
-                }
-            }
-            
-            // Also check for question patterns
-            for (var j = 0; j < questionWords.length; j++) {
-                if (message.toLowerCase().includes(questionWords[j])) {
-                    needsIntel = true;
-                    break;
-                }
-            }
-            
-            if (needsIntel) {
-                console.log('Making intelligence request');
-                fetch('/api/intelligence', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: message })
-                })
-                .then(function(response) {
-                    console.log('Response status:', response.status);
-                    return response.json();
-                })
-                .then(function(data) {
-                    console.log('Data received:', data);
-                    var messages = document.getElementById('messages');
-                    messages.removeChild(messages.lastChild);
-                    
-                    var html = createIntelligenceHTML(data);
-                    addMessage('bot', html);
-                })
-                .catch(function(error) {
-                    console.error('Error:', error);
-                    var messages = document.getElementById('messages');
-                    messages.removeChild(messages.lastChild);
-                    addMessage('bot', '❌ Analysis error. Please try again.');
-                });
-            } else {
-                // Use OpenAI assistant for regular chat
-                console.log('Making regular chat request');
-                fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
-                })
-                .then(function(response) {
-                    console.log('Chat response status:', response.status);
-                    return response.json();
-                })
-                .then(function(data) {
-                    console.log('Chat data received:', data);
-                    var messages = document.getElementById('messages');
-                    messages.removeChild(messages.lastChild);
-                    addMessage('bot', data.message || 'I\'m here to help with questions and market analysis!');
-                })
-                .catch(function(error) {
-                    console.error('Chat error:', error);
-                    var messages = document.getElementById('messages');
-                    messages.removeChild(messages.lastChild);
-                    addMessage('bot', 'I\'m here to help! For market analysis, try asking about specific brands or companies.');
-                });
-            }
-        }
-        
-        function createIntelligenceHTML(data) {
-            var html = '<div class="intelligence">';
-            html += '<div class="intel-title">' + data.query + ' - ' + data.researchType.charAt(0).toUpperCase() + data.researchType.slice(1) + ' Intelligence</div>';
-            
-            // Sentiment cards
-            html += '<div class="sentiment">';
-            html += '<div class="sentiment-card"><div class="percentage positive">' + data.positive + '%</div><div class="label">Positive</div></div>';
-            html += '<div class="sentiment-card"><div class="percentage neutral">' + data.neutral + '%</div><div class="label">Neutral</div></div>';
-            html += '</div>';
-            html += '<div class="sentiment">';
-            html += '<div class="sentiment-card"><div class="percentage negative">' + data.negative + '%</div><div class="label">Negative</div></div>';
-            html += '<div class="sentiment-card"><div class="percentage">' + data.mentions + '</div><div class="label">Mentions</div></div>';
-            html += '</div>';
-            
-            // Sentiment bar
-            html += '<div class="bar"><div class="bar-fill" style="width: ' + data.positive + '%"></div></div>';
-            
-            // Sources
-            html += '<div class="sources">';
-            for (var i = 0; i < data.sources.length; i++) {
-                var source = data.sources[i];
-                html += '<div class="source">';
-                html += '<div style="margin-bottom: 4px;">' + source.icon + ' <strong>' + source.platform + '</strong></div>';
-                html += '<div style="font-size: 11px; margin-bottom: 4px;">' + source.mentions + ' mentions</div>';
-                if (source.themes) {
-                    html += '<div style="font-size: 10px; margin-bottom: 6px; color: #666;">' + source.themes + '</div>';
-                }
-                html += '<a href="' + source.url + '" target="_blank" style="font-size: 10px; color: #2a5298; text-decoration: none; padding: 2px 6px; background: rgba(42, 82, 152, 0.1); border-radius: 4px;">View Source</a>';
-                html += '</div>';
-            }
-            html += '</div>';
-            
-            // Research insights
-            html += '<div style="margin: 15px 0;"><strong>🔍 Research Insights:</strong></div>';
-            for (var j = 0; j < data.insights.length; j++) {
-                html += '<div style="font-size: 12px; margin: 6px 0; padding-left: 10px; border-left: 3px solid #10b981;">• ' + data.insights[j] + '</div>';
-            }
-            
-            // Strategic recommendations
-            html += '<div style="margin: 15px 0 10px 0;"><strong>💡 Strategic Recommendations:</strong></div>';
-            for (var k = 0; k < data.recommendations.length; k++) {
-                html += '<div style="font-size: 12px; margin: 6px 0; padding-left: 10px; border-left: 3px solid #2a5298;">→ ' + data.recommendations[k] + '</div>';
-            }
-            
-            // Download button (simplified to avoid quote issues)
-            html += '<button class="download-btn" onclick="downloadReport(';
-            html += "'" + data.reportId + "'";
-            html += ')">📄 Download PDF Report</button>';
-            html += '</div>';
-            return html;
-        }
-        
+
         function downloadReport(reportId) {
             console.log('Downloading report:', reportId);
-            window.open('/api/report/' + reportId, '_blank');
+            window.open('/download-report/' + reportId, '_blank');
         }
-        
+
+        // File upload handling
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                const fileNames = Array.from(files).map(file => file.name).join(', ');
+                addMessage('user', '📁 Uploaded files: ' + fileNames);
+                
+                // You can implement file upload logic here
+                addMessage('assistant', 'Files received! I can analyze documents for sentiment, extract insights, and generate reports. What would you like me to do with these files?');
+            }
+        });
+
         console.log('InsightEar GPT loaded successfully');
     </script>
 </body>
 </html>`;
-
-    res.send(html);
+  
+  res.send(html);
 });
 
-app.post('/api/chat', async (req, res) => {
-    try {
-        const { message } = req.body;
-        console.log('Regular chat request:', message);
-        
-        if (!ASSISTANT_ID) {
-            return res.json({ 
-                message: "I'm here to help! I can provide market intelligence, brand analysis, and answer general questions. Try asking about specific companies or brands for detailed insights."
-            });
-        }
-
-        // Create a thread for this conversation
+// Route: Handle chat messages
+app.post('/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    console.log('Received message:', message);
+    
+    // Check if this needs intelligence analysis
+    if (needsIntelligence(message)) {
+      console.log('Intelligence analysis needed');
+      const intelligenceData = generateIntelligenceData(message);
+      const htmlResponse = createIntelligenceHTML(intelligenceData);
+      
+      // Store report data for PDF generation (with cleanup)
+      global.reportData = global.reportData || {};
+      global.reportData[intelligenceData.reportId] = intelligenceData;
+      
+      // Cleanup old reports to prevent memory leaks
+      const reportKeys = Object.keys(global.reportData);
+      if (reportKeys.length > 50) {
+        const oldestKey = reportKeys[0];
+        delete global.reportData[oldestKey];
+      }
+      
+      res.json({ response: htmlResponse });
+    } else {
+      console.log('Regular chat needed');
+      // Use OpenAI Assistant for regular conversation
+      try {
         const thread = await openai.beta.threads.create();
         
-        // Add the user message
         await openai.beta.threads.messages.create(thread.id, {
-            role: "user",
-            content: message
+          role: "user",
+          content: message
         });
 
-        // Create a run
         const run = await openai.beta.threads.runs.create(thread.id, {
-            assistant_id: ASSISTANT_ID
+          assistant_id: ASSISTANT_ID
         });
 
-        // Wait for completion with shorter timeout for regular chat
-        const result = await waitForCompletion(thread.id, run.id, 20);
-
-        if (result.error || !result.message) {
-            return res.json({ 
-                message: "I'm here to help with questions and provide market intelligence. Feel free to ask about brands, companies, or general topics!"
-            });
+        // Wait for completion with timeout
+        let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        let attempts = 0;
+        const maxAttempts = 30;
+        
+        while (runStatus.status === 'in_progress' && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+          attempts++;
         }
 
-        res.json({ message: result.message });
-
-    } catch (error) {
-        console.error('Chat error:', error);
-        res.json({ 
-            message: "I'm ready to help! Ask me about market analysis, brand sentiment, or any other questions you have."
-        });
+        if (runStatus.status === 'completed') {
+          const messages = await openai.beta.threads.messages.list(thread.id);
+          const assistantMessage = messages.data[0];
+          
+          if (assistantMessage && assistantMessage.content[0]) {
+            res.json({ response: assistantMessage.content[0].text.value });
+          } else {
+            res.json({ response: "I'm here to help with market intelligence and general questions. How can I assist you today?" });
+          }
+        } else {
+          // Fallback response
+          res.json({ response: "I'm InsightEar GPT, your market intelligence assistant. I can help analyze brand sentiment, conduct competitive research, and provide consumer insights. What would you like to know?" });
+        }
+      } catch (error) {
+        console.error('OpenAI error:', error);
+        res.json({ response: "I'm here to help with market analysis and general questions. How can I assist you today?" });
+      }
     }
+  } catch (error) {
+    console.error('Chat error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-// Wait for completion helper function
-async function waitForCompletion(threadId, runId, maxAttempts = 20) {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-            const run = await openai.beta.threads.runs.retrieve(threadId, runId);
-            
-            if (run.status === 'completed') {
-                const messages = await openai.beta.threads.messages.list(threadId);
-                const lastMessage = messages.data[0];
-                
-                if (lastMessage && lastMessage.content[0]) {
-                    return { message: lastMessage.content[0].text.value };
-                }
-            }
-            
-            if (run.status === 'failed' || run.status === 'cancelled' || run.status === 'expired') {
-                return { error: 'Assistant run ' + run.status };
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-        } catch (error) {
-            return { error: 'Failed to check run status' };
-        }
-    }
+// Route: Download PDF report
+app.get('/download-report/:reportId', (req, res) => {
+  try {
+    const reportId = req.params.reportId;
+    const reportData = global.reportData && global.reportData[reportId];
     
-    return { error: 'Timeout after ' + maxAttempts + ' seconds' };
-}
-
-app.post('/api/intelligence', (req, res) => {
-    try {
-        const { query } = req.body;
-        console.log('Intelligence request:', query);
-        
-        const data = generateIntelligence(query);
-        reports.set(data.reportId, data);
-        
-        console.log('Intelligence generated:', data);
-        res.json(data);
-    } catch (error) {
-        console.error('Intelligence error:', error);
-        res.status(500).json({ error: 'Failed' });
+    if (!reportData) {
+      return res.status(404).send('Report not found');
     }
+
+    // Create PDF
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="' + reportData.brand + '-intelligence-report.pdf"');
+    
+    doc.pipe(res);
+    
+    // PDF Content
+    doc.fontSize(20).text('Market Intelligence Report', 50, 50);
+    doc.fontSize(16).text(reportData.brand + ' - ' + reportData.researchType, 50, 80);
+    doc.fontSize(12).text('Generated on: ' + new Date().toLocaleDateString(), 50, 105);
+    
+    doc.moveDown(2);
+    
+    // Executive Summary
+    doc.fontSize(14).text('Executive Summary', 50, doc.y);
+    doc.fontSize(10).text('This report provides comprehensive market intelligence analysis for ' + reportData.brand + ' based on consumer sentiment, brand perception, and market positioning data.', 50, doc.y + 15);
+    
+    doc.moveDown(2);
+    
+    // Sentiment Analysis
+    doc.fontSize(14).text('Sentiment Analysis', 50, doc.y);
+    doc.fontSize(10);
+    doc.text('Positive Sentiment: ' + reportData.positive + '%', 70, doc.y + 15);
+    doc.text('Neutral Sentiment: ' + reportData.neutral + '%', 70, doc.y + 10);
+    doc.text('Negative Sentiment: ' + reportData.negative + '%', 70, doc.y + 10);
+    doc.text('Total Mentions: ' + reportData.totalMentions, 70, doc.y + 10);
+    
+    doc.moveDown(2);
+    
+    // Data Sources
+    doc.fontSize(14).text('Data Sources', 50, doc.y);
+    reportData.sources.forEach(function(source) {
+      doc.fontSize(10);
+      doc.text('• ' + source.platform + ': ' + source.mentions + ' mentions (' + source.sentiment + ')', 70, doc.y + 15);
+    });
+    
+    doc.moveDown(2);
+    
+    // Key Insights
+    doc.fontSize(14).text('Key Insights', 50, doc.y);
+    reportData.insights.forEach(function(insight) {
+      doc.fontSize(10).text('• ' + insight, 70, doc.y + 15);
+    });
+    
+    doc.moveDown(2);
+    
+    // Recommendations
+    doc.fontSize(14).text('Strategic Recommendations', 50, doc.y);
+    reportData.recommendations.forEach(function(rec) {
+      doc.fontSize(10).text('• ' + rec, 70, doc.y + 15);
+    });
+    
+    doc.end();
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).send('Error generating PDF');
+  }
 });
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file' });
-        }
-        console.log('File uploaded:', req.file.originalname);
-        res.json({ message: 'File uploaded: ' + req.file.originalname });
-    } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ error: 'Upload failed' });
-    }
+// Route: File upload handling
+app.post('/upload', upload.array('files'), (req, res) => {
+  try {
+    const files = req.files;
+    console.log('Files uploaded:', files.length);
+    
+    res.json({ 
+      message: 'Files uploaded successfully',
+      fileCount: files.length,
+      files: files.map(f => ({ name: f.originalname, size: f.size }))
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Upload failed' });
+  }
 });
 
-app.get('/api/report/:reportId', (req, res) => {
-    try {
-        const data = reports.get(req.params.reportId);
-        if (!data) {
-            return res.status(404).send('Report not found');
-        }
-        
-        console.log('Generating PDF report for:', req.params.reportId);
-        
-        // Create PDF document
-        const doc = new PDFDocument({ margin: 50 });
-        
-        // Set response headers for PDF
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="InsightEar_Report_${data.reportId}.pdf"`);
-        
-        // Pipe PDF to response
-        doc.pipe(res);
-        
-        // Add content to PDF
-        
-        // Header
-        doc.fontSize(24)
-           .fillColor('#1e3c72')
-           .text('InsightEar GPT', 50, 50);
-           
-        doc.fontSize(14)
-           .fillColor('#666')
-           .text('Enterprise Market Intelligence Report', 50, 80);
-           
-        doc.fontSize(20)
-           .fillColor('#333')
-           .text(data.query, 50, 120);
-           
-        doc.fontSize(12)
-           .fillColor('#666')
-           .text(data.researchType.charAt(0).toUpperCase() + data.researchType.slice(1) + ' Intelligence Report | Generated: ' + new Date(data.timestamp).toLocaleString(), 50, 150);
-           
-        // Add line
-        doc.moveTo(50, 180)
-           .lineTo(550, 180)
-           .strokeColor('#1e3c72')
-           .lineWidth(2)
-           .stroke();
-        
-        let yPosition = 220;
-        
-        // Executive Summary
-        doc.fontSize(16)
-           .fillColor('#1e3c72')
-           .text('EXECUTIVE SUMMARY', 50, yPosition);
-           
-        yPosition += 30;
-        doc.fontSize(12)
-           .fillColor('#333')
-           .text(`Comprehensive analysis of ${data.query} across ${data.mentions} mentions reveals ${data.positive}% positive sentiment with strong market positioning.`, 50, yPosition, { width: 500 });
-        
-        yPosition += 80;
-        
-        // Sentiment Analysis
-        doc.fontSize(16)
-           .fillColor('#1e3c72')
-           .text('SENTIMENT ANALYSIS', 50, yPosition);
-           
-        yPosition += 40;
-        
-        // Sentiment metrics in a grid
-        const metrics = [
-            { label: 'Positive', value: data.positive + '%', color: '#10b981', x: 50 },
-            { label: 'Neutral', value: data.neutral + '%', color: '#f59e0b', x: 180 },
-            { label: 'Negative', value: data.negative + '%', color: '#ef4444', x: 310 },
-            { label: 'Total Mentions', value: data.mentions, color: '#333', x: 440 }
-        ];
-        
-        metrics.forEach(metric => {
-            // Draw metric box
-            doc.rect(metric.x, yPosition, 120, 60)
-               .fillAndStroke('#f8f9fa', '#e2e8f0');
-               
-            // Add metric value
-            doc.fontSize(18)
-               .fillColor(metric.color)
-               .text(metric.value, metric.x + 10, yPosition + 15, { width: 100, align: 'center' });
-               
-            // Add metric label
-            doc.fontSize(10)
-               .fillColor('#666')
-               .text(metric.label.toUpperCase(), metric.x + 10, yPosition + 40, { width: 100, align: 'center' });
-        });
-        
-        yPosition += 100;
-        
-        // Data Sources
-        doc.fontSize(16)
-           .fillColor('#1e3c72')
-           .text('DATA SOURCES', 50, yPosition);
-           
-        yPosition += 30;
-        
-        data.sources.forEach((source, index) => {
-            doc.fontSize(12)
-               .fillColor('#333')
-               .text(`${source.icon} ${source.platform}`, 70, yPosition)
-               .text(`${source.mentions} mentions`, 250, yPosition)
-               .text(`Sentiment: ${source.sentiment}`, 350, yPosition);
-            if (source.themes) {
-                doc.fontSize(10)
-                   .fillColor('#666')
-                   .text(`Themes: ${source.themes}`, 70, yPosition + 15);
-                yPosition += 35;
-            } else {
-                yPosition += 25;
-            }
-        });
-        
-        yPosition += 20;
-        
-        // Research Insights (using actual data)
-        doc.fontSize(16)
-           .fillColor('#1e3c72')
-           .text('RESEARCH INSIGHTS', 50, yPosition);
-           
-        yPosition += 30;
-        
-        data.insights.forEach(insight => {
-            doc.fontSize(12)
-               .fillColor('#333')
-               .text('• ' + insight, 70, yPosition, { width: 480 });
-            yPosition += 25;
-        });
-        
-        yPosition += 20;
-        
-        // Strategic Recommendations (using actual data)
-        doc.fontSize(16)
-           .fillColor('#1e3c72')
-           .text('STRATEGIC RECOMMENDATIONS', 50, yPosition);
-           
-        yPosition += 30;
-        
-        data.recommendations.forEach(rec => {
-            doc.fontSize(12)
-               .fillColor('#333')
-               .text('→ ' + rec, 70, yPosition, { width: 480 });
-            yPosition += 25;
-        });
-        
-        // Footer
-        doc.fontSize(10)
-           .fillColor('#666')
-           .text('Report ID: ' + data.reportId, 50, 750)
-           .text('Generated by InsightEar GPT Enterprise Market Intelligence Platform', 50, 765);
-        
-        // Finalize PDF
-        doc.end();
-        
-    } catch (error) {
-        console.error('PDF generation error:', error);
-        res.status(500).send('PDF generation failed');
-    }
-});
-
-app.get('/favicon.ico', (req, res) => {
-    res.status(204).end();
-});
-
+// Route: Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-process.on('SIGTERM', () => {
-    console.log('Shutting down gracefully');
-    process.exit(0);
+// Route: Favicon
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
 });
 
+// Global error handler
+app.use((error, req, res, next) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Start server - Railway requires binding to 0.0.0.0
 app.listen(port, '0.0.0.0', () => {
-    console.log('InsightEar GPT server running on port ' + port);
-    console.log('Ready for market intelligence!');
+  console.log('InsightEar GPT server running on port', port);
+  console.log('Server bound to 0.0.0.0:' + port);
+  console.log('Ready for market intelligence!');
 });
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('Received SIGINT, shutting down gracefully');
+  process.exit(0);
+});
+
+module.exports = app;
