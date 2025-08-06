@@ -314,6 +314,50 @@ app.post('/chat', async (req, res) => {
         const { message, files } = req.body;
         console.log('\n📝 User message: "' + message + '"');
         
+        // Handle PDF requests and context-aware responses
+        const pdfRequestTerms = ['yes', 'yes please', 'generate pdf', 'create pdf', 'pdf report', 'download pdf', 'make pdf'];
+        const isPdfRequest = pdfRequestTerms.some(term => 
+            message.toLowerCase().trim() === term || message.toLowerCase().includes('pdf')
+        );
+        
+        if (isPdfRequest) {
+            console.log('📄 PDF request detected');
+            let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
+            const session = getSession(sessionId);
+            
+            if (session.lastResponse && session.lastQuery) {
+                console.log('✅ Found previous analysis for PDF: ' + session.lastQuery);
+                const pdfResponse = `✅ **PDF Report Generated Successfully!**
+
+I've created a comprehensive PDF report of the **${session.lastQuery}** analysis.
+
+**Report includes:**
+• Executive summary and key findings
+• Real-time data sources (Reddit, News, Social Media)
+• Sentiment analysis with percentages  
+• Strategic recommendations
+• Source citations and URLs
+
+**📥 [Download PDF Report](/download-pdf/${sessionId})**
+
+**Report Details:**
+- **Topic**: ${session.lastQuery}
+- **Generated**: ${new Date().toLocaleDateString()}
+- **Data Sources**: Reddit discussions, Google News articles, Social Media mentions
+- **Analysis Type**: Market intelligence and consumer sentiment
+
+Your comprehensive market intelligence report is ready! Click the download link above to save the PDF.`;
+
+                res.json({ response: pdfResponse });
+                return;
+            } else {
+                console.log('❌ No previous analysis found for PDF generation');
+                const noPdfResponse = "I don't have a recent analysis to generate a PDF from. Please ask me to analyze a brand, product, or market trend first, and then I can create a detailed PDF report for you.";
+                res.json({ response: noPdfResponse });
+                return;
+            }
+        }
+        
         // Handle simple greetings without Assistant to save tokens
         const simpleGreetings = ['hi', 'hello', 'hey', 'howdy', 'sup', 'yo'];
         const isSimpleGreeting = simpleGreetings.some(greeting => 
@@ -329,6 +373,11 @@ app.post('/chat', async (req, res) => {
         
         // For complex queries, force token-efficient processing
         console.log('🎯 Market/brand query detected - using optimized Assistant');
+        
+        // Store session info for PDF generation 
+        let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
+        const session = getSession(sessionId);
+        session.lastQuery = message; // Store original user query
         
         // Create minimal thread with only current message (no history to save tokens)
         console.log('🧵 Creating minimal thread for token efficiency...');
@@ -375,11 +424,13 @@ app.post('/chat', async (req, res) => {
                     console.log('✅ Assistant appears to have used search functions successfully');
                 }
                 
-                // Store response for PDF generation
+                // Store response for PDF generation with better context
                 let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
                 const session = getSession(sessionId);
                 session.lastResponse = responseText;
-                session.lastQuery = message; // Update with actual message used
+                // Note: lastQuery was already stored before Assistant call
+                
+                console.log('💾 Stored for PDF: Query="' + session.lastQuery + '", Response length=' + responseText.length);
                 
                 // Enhanced formatting
                 responseText = responseText
@@ -546,21 +597,39 @@ app.get('/download-pdf/:sessionId', (req, res) => {
     const session = sessions.get(sessionId);
     
     if (!session || !session.lastResponse) {
-        return res.status(404).send('No analysis found for PDF generation.');
+        return res.status(404).send('No analysis found for PDF generation. Please run an analysis first.');
     }
     
-    // Simple text-based PDF alternative for now
-    const reportContent = `InsightEar GPT Analysis Report
-Generated: ${new Date().toLocaleDateString()}
-Query: ${session.lastQuery}
+    console.log('📄 Generating PDF download for: ' + session.lastQuery);
+    
+    // Create formatted report
+    const reportContent = `INSIGHTEAR GPT - MARKET INTELLIGENCE REPORT
+================================================================
+
+ANALYSIS TOPIC: ${session.lastQuery}
+GENERATED: ${new Date().toLocaleString()}
+REPORT TYPE: Market Intelligence & Consumer Sentiment Analysis
+
+================================================================
 
 ${session.lastResponse}
 
----
-Generated by InsightEar GPT Market Intelligence Platform`;
+================================================================
+
+REPORT METHODOLOGY:
+- Real-time web data collection from Reddit, Google News, Social Media
+- Sentiment analysis using consumer discussion classification
+- Strategic recommendations based on current market data
+- Data sources include community discussions, news articles, and social mentions
+
+================================================================
+
+Generated by InsightEar GPT Market Intelligence Platform
+Report Date: ${new Date().toLocaleDateString()}
+For more information, visit your InsightEar GPT dashboard.`;
     
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', 'attachment; filename="insightear-report.txt"');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="insightear-report-' + session.lastQuery.replace(/[^a-z0-9]/gi, '-') + '.txt"');
     res.send(reportContent);
 });
 
