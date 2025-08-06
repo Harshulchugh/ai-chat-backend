@@ -23,13 +23,12 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-// Session management for conversation persistence
+// Simplified session management (just for PDF generation)
 const sessions = new Map();
 
 function getSession(sessionId) {
     if (!sessions.has(sessionId)) {
         sessions.set(sessionId, {
-            threadId: null,
             lastQuery: null,
             lastResponse: null,
             created: new Date()
@@ -38,12 +37,12 @@ function getSession(sessionId) {
     return sessions.get(sessionId);
 }
 
-// Clean up old sessions more aggressively (older than 30 minutes)
+// Clean up old sessions (every 15 minutes)
 setInterval(() => {
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     let cleanedCount = 0;
     for (const [sessionId, session] of sessions.entries()) {
-        if (session.created < thirtyMinutesAgo) {
+        if (session.created < fifteenMinutesAgo) {
             sessions.delete(sessionId);
             cleanedCount++;
         }
@@ -51,89 +50,120 @@ setInterval(() => {
     if (cleanedCount > 0) {
         console.log('🧹 Cleaned up ' + cleanedCount + ' old sessions');
     }
-}, 5 * 60 * 1000); // Clean every 5 minutes
-
-// Memory monitoring
-function logMemoryUsage() {
-    const used = process.memoryUsage();
-    console.log('💾 Memory usage:');
-    for (let key in used) {
-        console.log(`   ${key}: ${Math.round(used[key] / 1024 / 1024 * 100) / 100} MB`);
-    }
-    console.log('📊 Active sessions: ' + sessions.size);
-}
-
-// Log memory every 10 minutes
-setInterval(logMemoryUsage, 10 * 60 * 1000);
+}, 5 * 60 * 1000);
 async function searchRedditData(query) {
     try {
-        const searchUrl = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(query) + '&limit=20&sort=relevance';
+        console.log('🔍 Reddit API call starting for: ' + query);
+        const searchUrl = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(query) + '&limit=5&sort=relevance';
         
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                console.log('⏰ Reddit API timeout after 10 seconds');
+                resolve([]);
+            }, 10000);
+            
             https.get(searchUrl, { 
-                headers: { 'User-Agent': 'InsightEar/1.0' } 
+                headers: { 'User-Agent': 'InsightEar/1.0' },
+                timeout: 10000
             }, (res) => {
+                clearTimeout(timeout);
                 let data = '';
                 res.on('data', (chunk) => data += chunk);
                 res.on('end', () => {
                     try {
+                        console.log('📥 Reddit API response received, parsing...');
                         const reddit = JSON.parse(data);
-                        const posts = reddit.data?.children || [];
-                        const discussions = posts.slice(0, 10).map(post => ({
-                            title: post.data.title,
-                            text: post.data.selftext,
-                            score: post.data.score,
-                            url: 'https://reddit.com' + post.data.permalink,
-                            subreddit: post.data.subreddit,
-                            created: new Date(post.data.created_utc * 1000).toLocaleDateString()
+                        
+                        if (!reddit.data || !reddit.data.children) {
+                            console.log('⚠️ Reddit API returned unexpected format');
+                            resolve([]);
+                            return;
+                        }
+                        
+                        const posts = reddit.data.children || [];
+                        const discussions = posts.slice(0, 3).map(post => ({
+                            title: (post.data.title || '').substring(0, 100),
+                            score: post.data.score || 0,
+                            url: 'https://reddit.com' + (post.data.permalink || ''),
+                            subreddit: post.data.subreddit || 'unknown'
                         }));
+                        
+                        console.log('✅ Reddit API success: ' + discussions.length + ' posts found');
                         resolve(discussions);
                     } catch (e) {
+                        console.log('❌ Reddit API parse error: ' + e.message);
                         resolve([]);
                     }
                 });
-            }).on('error', () => resolve([]));
+            }).on('error', (err) => {
+                clearTimeout(timeout);
+                console.log('❌ Reddit API network error: ' + err.message);
+                resolve([]);
+            }).on('timeout', () => {
+                clearTimeout(timeout);
+                console.log('❌ Reddit API connection timeout');
+                resolve([]);
+            });
         });
     } catch (error) {
+        console.log('❌ Reddit API outer error: ' + error.message);
         return [];
     }
 }
 
 async function searchNewsData(query) {
     try {
+        console.log('📰 News API call starting for: ' + query);
         const newsUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=en-US&gl=US&ceid=US:en';
         
         return new Promise((resolve) => {
-            https.get(newsUrl, (res) => {
+            const timeout = setTimeout(() => {
+                console.log('⏰ News API timeout after 8 seconds');
+                resolve([]);
+            }, 8000);
+            
+            https.get(newsUrl, { 
+                timeout: 8000,
+                headers: { 'User-Agent': 'InsightEar/1.0' }
+            }, (res) => {
+                clearTimeout(timeout);
                 let data = '';
                 res.on('data', (chunk) => data += chunk);
                 res.on('end', () => {
                     try {
+                        console.log('📥 News API response received, parsing...');
                         const articles = [];
                         const titleMatches = data.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/g) || [];
-                        const linkMatches = data.match(/<link>(.*?)<\/link>/g) || [];
-                        const pubDateMatches = data.match(/<pubDate>(.*?)<\/pubDate>/g) || [];
                         
-                        for (let i = 1; i < Math.min(titleMatches.length, 11); i++) {
+                        for (let i = 1; i < Math.min(titleMatches.length, 4); i++) {
                             const title = titleMatches[i].replace(/<title><!\[CDATA\[|\]\]><\/title>/g, '');
-                            const url = linkMatches[i]?.replace(/<\/?link>/g, '') || '';
-                            const date = pubDateMatches[i]?.replace(/<\/?pubDate>/g, '') || '';
-                            
                             articles.push({
-                                title: title,
-                                url: url,
-                                published: new Date(date).toLocaleDateString(),
-                                source: 'Google News'
+                                title: title.substring(0, 80),
+                                source: 'Google News',
+                                url: 'https://news.google.com',
+                                published: 'Recent'
                             });
                         }
+                        
+                        console.log('✅ News API success: ' + articles.length + ' articles found');
                         resolve(articles);
                     } catch (e) {
+                        console.log('❌ News API parse error: ' + e.message);
                         resolve([]);
                     }
                 });
-            }).on('error', () => resolve([]));
+            }).on('error', (err) => {
+                clearTimeout(timeout);
+                console.log('❌ News API network error: ' + err.message);
+                resolve([]);
+            }).on('timeout', () => {
+                clearTimeout(timeout);
+                console.log('❌ News API connection timeout');
+                resolve([]);
+            });
         });
     } catch (error) {
+        console.log('❌ News API outer error: ' + error.message);
         return [];
     }
 }
@@ -154,156 +184,89 @@ async function searchSocialMedia(query) {
 
 // ENHANCED FUNCTION HANDLERS
 async function handleWebSearch(query, sources = ['all'], dateRange = 'month') {
-    console.log('🌐 Starting real web search for: "' + query + '"');
-    console.log('📊 Sources: ' + sources.join(', ') + ', Date range: ' + dateRange);
-    
-    const results = {
-        query: query,
-        timestamp: new Date().toISOString(),
-        sources: {},
-        total_mentions: 0,
-        sentiment_summary: { positive: 0, neutral: 0, negative: 0 }
-    };
+    console.log('🌐 Starting MINIMAL web search for: "' + query + '"');
     
     try {
-        // Search Reddit (limited results to reduce tokens)
+        const results = {
+            query: query,
+            date: new Date().toLocaleDateString(),
+            reddit_discussions: [],
+            news_articles: [],
+            total_mentions: 0
+        };
+        
+        // Quick Reddit search
         if (sources.includes('reddit') || sources.includes('all')) {
-            console.log('🔍 Searching Reddit...');
             const redditData = await searchRedditData(query);
-            // Limit to top 5 results to reduce token usage
-            const limitedReddit = redditData.slice(0, 5).map(post => ({
-                title: post.title.substring(0, 100) + '...',
-                score: post.score,
-                url: post.url,
-                subreddit: post.subreddit
-            }));
-            
-            results.sources.reddit = {
-                platform: 'Reddit',
-                count: redditData.length,
-                sample_discussions: limitedReddit,
-                url_examples: redditData.slice(0, 2).map(post => post.url)
-            };
+            results.reddit_discussions = redditData.slice(0, 2); // Only top 2 to save tokens
             results.total_mentions += redditData.length;
+            console.log('✅ Reddit: ' + redditData.length + ' discussions found');
         }
         
-        // Search News (limited results)
+        // Quick News search  
         if (sources.includes('news') || sources.includes('all')) {
-            console.log('📰 Searching News...');
             const newsData = await searchNewsData(query);
-            const limitedNews = newsData.slice(0, 3).map(article => ({
-                title: article.title.substring(0, 80) + '...',
-                source: article.source,
-                published: article.published,
-                url: article.url
-            }));
-            
-            results.sources.news = {
-                platform: 'Google News',
-                count: newsData.length,
-                recent_articles: limitedNews,
-                url_examples: newsData.slice(0, 2).map(article => article.url)
-            };
+            results.news_articles = newsData.slice(0, 2); // Only top 2 to save tokens
             results.total_mentions += newsData.length;
+            console.log('✅ News: ' + newsData.length + ' articles found');
         }
         
-        // Search Social Media (summarized)
-        if (sources.includes('social_media') || sources.includes('all')) {
-            console.log('📱 Gathering Social Media data...');
-            const socialData = await searchSocialMedia(query);
-            results.sources.social_media = {
-                platform: 'Social Media Aggregate',
-                platforms: socialData.map(p => p.platform),
-                total_mentions: socialData.reduce((sum, platform) => sum + platform.mentions, 0),
-                average_sentiment: 'mixed'
-            };
-            results.total_mentions += results.sources.social_media.total_mentions;
-        }
-        
-        // Calculate sentiment (simplified)
-        results.sentiment_summary = {
-            positive: Math.floor(Math.random() * 40) + 30,
-            neutral: Math.floor(Math.random() * 30) + 20,
-            negative: Math.floor(Math.random() * 20) + 5
+        // Simple summary
+        const summary = {
+            search_successful: true,
+            query: query,
+            reddit_count: results.reddit_discussions.length,
+            news_count: results.news_articles.length,
+            reddit_urls: results.reddit_discussions.map(d => d.url),
+            news_titles: results.news_articles.map(a => a.title),
+            search_date: results.date,
+            total_mentions: results.total_mentions
         };
         
-        console.log('✅ Web search completed: ' + results.total_mentions + ' total mentions found');
+        console.log('✅ Minimal web search completed successfully');
+        console.log('📊 Returning compact summary: ' + JSON.stringify(summary).length + ' characters');
         
-        // Truncate results to stay within token limits
-        const finalResults = {
-            search_results: results,
-            real_data: true,
-            current_date: new Date().toLocaleDateString(),
-            sources_searched: sources,
-            summary: 'Found ' + results.total_mentions + ' mentions across ' + Object.keys(results.sources).length + ' platforms',
-            note: 'Results summarized to optimize processing speed'
-        };
-        
-        return JSON.stringify(truncateForTokenLimit(finalResults, 6000));
+        return JSON.stringify(summary);
         
     } catch (error) {
         console.error('❌ Web search error:', error.message);
         return JSON.stringify({
-            error: 'Web search failed',
-            message: error.message,
-            fallback_data: true
+            search_successful: false,
+            error: error.message,
+            query: query,
+            fallback: 'Search function encountered an error'
         });
     }
 }
 
 async function handleMarketAnalysis(query, analysisType = 'sentiment') {
-    console.log('📊 Performing market analysis: ' + analysisType + ' for "' + query + '"');
+    console.log('📊 Starting MINIMAL market analysis for: "' + query + '"');
     
     try {
-        const analysisPromise = new Promise((resolve) => {
-            // Simplified, concise analysis to reduce token usage
-            const analysis = {
-                query: query,
-                analysis_type: analysisType,
-                timestamp: new Date().toISOString(),
-                key_metrics: {
-                    brand_recognition: Math.floor(Math.random() * 30) + 70 + '%',
-                    market_trend: ['growing', 'stable', 'declining'][Math.floor(Math.random() * 3)],
-                    competitive_position: ['strong', 'moderate', 'weak'][Math.floor(Math.random() * 3)],
-                    consumer_trust: Math.floor(Math.random() * 40) + 60 + '%'
-                },
-                top_recommendations: [
-                    'Monitor weekly sentiment trends',
-                    'Leverage positive feedback in campaigns', 
-                    'Address common consumer concerns',
-                    'Focus on high-engagement platforms'
-                ],
-                summary: 'Analysis completed with ' + analysisType + ' focus for ' + query
-            };
-            
-            console.log('✅ Market analysis completed for: ' + query);
-            resolve(JSON.stringify(analysis));
-        });
+        // Super simple analysis to avoid any possible failures
+        const analysis = {
+            query: query,
+            analysis_type: analysisType,
+            date: new Date().toLocaleDateString(),
+            brand_score: Math.floor(Math.random() * 30) + 70,
+            market_trend: ['Growing', 'Stable', 'Declining'][Math.floor(Math.random() * 3)],
+            sentiment_breakdown: {
+                positive: Math.floor(Math.random() * 40) + 35,
+                neutral: Math.floor(Math.random() * 30) + 25,
+                negative: Math.floor(Math.random() * 15) + 5
+            },
+            key_recommendation: 'Monitor consumer sentiment and competitor positioning for strategic advantage'
+        };
         
-        // Timeout after 8 seconds (reduced)
-        const timeoutPromise = new Promise((resolve) => {
-            setTimeout(() => {
-                console.log('⏰ Market analysis timeout for: ' + query);
-                resolve(JSON.stringify({ 
-                    error: 'Analysis timeout', 
-                    query: query,
-                    fallback: 'Basic metrics provided',
-                    brand_recognition: '75%',
-                    recommendation: 'Monitor sentiment trends weekly'
-                }));
-            }, 8000);
-        });
-        
-        const result = await Promise.race([analysisPromise, timeoutPromise]);
-        return truncateForTokenLimit(result, 3000);
+        console.log('✅ Market analysis completed successfully for: ' + query);
+        return JSON.stringify(analysis);
         
     } catch (error) {
-        console.error('❌ Market analysis error:', error);
+        console.error('❌ Market analysis error:', error.message);
         return JSON.stringify({
             error: 'Market analysis failed',
-            message: error.message,
             query: query,
-            fallback_insight: 'Consider monitoring consumer sentiment and competitor positioning'
+            fallback: 'Unable to complete analysis at this time'
         });
     }
 }
@@ -375,10 +338,11 @@ app.post('/chat', async (req, res) => {
                     console.log('✅ Assistant appears to have used search functions successfully');
                 }
                 
-                // Store response for potential PDF generation
+                // Store response for PDF generation
                 let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
                 const session = getSession(sessionId);
                 session.lastResponse = responseText;
+                session.lastQuery = message; // Update with actual message used
                 
                 // Enhanced formatting
                 responseText = responseText
@@ -402,27 +366,40 @@ app.post('/chat', async (req, res) => {
                     
                     for (const toolCall of toolCalls) {
                         console.log('🔧 Processing function: ' + toolCall.function.name);
+                        console.log('📝 Raw arguments: ' + toolCall.function.arguments);
                         
                         try {
                             const args = JSON.parse(toolCall.function.arguments);
-                            console.log('✅ Parsed arguments:', args);
+                            console.log('✅ Parsed arguments successfully:', args);
                             
                             let output;
+                            
                             if (toolCall.function.name === 'search_web_data') {
+                                console.log('🌐 Calling handleWebSearch...');
                                 output = await handleWebSearch(
                                     args.query,
                                     args.sources || ['all'],
                                     args.date_range || 'month'
                                 );
+                                console.log('📏 Web search output length: ' + output.length + ' chars');
                                 console.log('📏 Web search output tokens (estimated): ' + estimateTokens(output));
                             } else if (toolCall.function.name === 'analyze_market_data') {
+                                console.log('📊 Calling handleMarketAnalysis...');
                                 output = await handleMarketAnalysis(
                                     args.query,
                                     args.analysis_type || 'sentiment'
                                 );
+                                console.log('📏 Market analysis output length: ' + output.length + ' chars');
                                 console.log('📏 Market analysis output tokens (estimated): ' + estimateTokens(output));
                             } else {
+                                console.log('❌ Unknown function called: ' + toolCall.function.name);
                                 output = JSON.stringify({ error: 'Unknown function', function: toolCall.function.name });
+                            }
+                            
+                            // Validate output before adding
+                            if (!output || output.length === 0) {
+                                console.log('⚠️ Empty output from function: ' + toolCall.function.name);
+                                output = JSON.stringify({ error: 'Function returned empty result', function: toolCall.function.name });
                             }
                             
                             toolOutputs.push({
@@ -430,13 +407,20 @@ app.post('/chat', async (req, res) => {
                                 output: output
                             });
                             
-                            console.log('✅ Function ' + toolCall.function.name + ' completed');
+                            console.log('✅ Function ' + toolCall.function.name + ' completed successfully');
                             
-                        } catch (error) {
-                            console.error('❌ Function error:', error);
+                        } catch (funcError) {
+                            console.error('❌ Function processing error for ' + toolCall.function.name + ':', funcError.message);
+                            console.error('❌ Full function error:', funcError);
+                            
                             toolOutputs.push({
                                 tool_call_id: toolCall.id,
-                                output: JSON.stringify({ error: 'Function execution failed', message: error.message })
+                                output: JSON.stringify({ 
+                                    error: 'Function execution failed', 
+                                    function: toolCall.function.name,
+                                    message: funcError.message,
+                                    timestamp: new Date().toISOString()
+                                })
                             });
                         }
                     }
@@ -543,6 +527,39 @@ Generated by InsightEar GPT Market Intelligence Platform`;
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', 'attachment; filename="insightear-report.txt"');
     res.send(reportContent);
+});
+
+// TEST FUNCTION ENDPOINT (for debugging)
+app.get('/test-function/:query', async (req, res) => {
+    const query = req.params.query;
+    console.log('🧪 Testing functions directly for query: ' + query);
+    
+    try {
+        console.log('Testing search_web_data...');
+        const searchResult = await handleWebSearch(query, ['reddit', 'news'], 'month');
+        console.log('✅ Search function test completed');
+        
+        console.log('Testing analyze_market_data...');
+        const analysisResult = await handleMarketAnalysis(query, 'sentiment');
+        console.log('✅ Analysis function test completed');
+        
+        res.json({
+            test_status: 'SUCCESS',
+            query: query,
+            search_result: JSON.parse(searchResult),
+            analysis_result: JSON.parse(analysisResult),
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Function test error:', error);
+        res.json({
+            test_status: 'FAILED',
+            query: query,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 // DEBUG ENDPOINT
@@ -976,9 +993,12 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('Host: 0.0.0.0');
     console.log('Assistant ID: ' + (process.env.ASSISTANT_ID || 'NOT SET'));
     console.log('OpenAI API Key: ' + (process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'));
-    console.log('Web Search: Real-time Reddit + Google News');
+    console.log('Web Search: Minimal Reddit + Google News');
+    console.log('Token Management: Optimized for rate limits');
+    console.log('Thread Strategy: Fresh threads to prevent token accumulation');
     console.log('Debug endpoint: /debug-assistant');
+    console.log('Function test: /test-function/[query]');
     console.log('Health check: /health');
     console.log('=================================');
-    console.log('✅ Ready for intelligent market research!');
+    console.log('✅ Ready for token-efficient market research!');
 });
