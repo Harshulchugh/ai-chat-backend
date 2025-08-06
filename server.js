@@ -480,11 +480,18 @@ app.get('/', (req, res) => {
             }
         }
 
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
         function downloadReport(reportId) {
             console.log('Report download requested:', reportId);
             alert('PDF download functionality will be implemented based on your assistant\'s report format. Your assistant can provide downloadable reports directly.');
         }
 
+        // File upload handling
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const files = event.target.files;
             if (files.length > 0) {
