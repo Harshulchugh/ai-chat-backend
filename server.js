@@ -891,6 +891,90 @@ app.post('/generate-pdf', (req, res) => {
   }
 });
 
+// Debug endpoint to test Assistant
+app.get('/test-assistant', async (req, res) => {
+  try {
+    console.log('🧪 Testing basic Assistant functionality...');
+    
+    // Test 1: Get Assistant details
+    console.log('📋 Step 1: Retrieving Assistant details...');
+    const assistant = await openai.beta.assistants.retrieve(ASSISTANT_ID);
+    console.log('✅ Assistant retrieved:', assistant.name);
+    
+    // Test 2: Create a simple thread
+    console.log('📋 Step 2: Creating thread...');
+    const thread = await openai.beta.threads.create();
+    console.log('✅ Thread created:', thread.id);
+    
+    // Test 3: Add a simple message
+    console.log('📋 Step 3: Adding simple message...');
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: "Hello, can you just say 'test successful'?"
+    });
+    console.log('✅ Message added');
+    
+    // Test 4: Create a run (the failing part)
+    console.log('📋 Step 4: Creating run...');
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: ASSISTANT_ID
+    });
+    console.log('✅ Run created:', run.id, 'Initial status:', run.status);
+    
+    // Test 5: Monitor for just 30 seconds
+    console.log('📋 Step 5: Monitoring run status...');
+    let attempts = 0;
+    let runStatus = run;
+    
+    while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+      if (attempts >= 10) break; // Max 30 seconds
+      
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      attempts++;
+      
+      console.log(`⏱️ Attempt ${attempts}: Status = ${runStatus.status}`);
+    }
+    
+    let result = {
+      assistant_name: assistant.name,
+      assistant_model: assistant.model,
+      thread_id: thread.id,
+      run_id: run.id,
+      final_status: runStatus.status,
+      attempts: attempts,
+      processing_time: attempts * 3 + ' seconds'
+    };
+    
+    if (runStatus.status === 'completed') {
+      console.log('🎉 Test completed successfully!');
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      const response = messages.data[0]?.content[0]?.text?.value || 'No response';
+      result.assistant_response = response;
+      result.test_result = 'SUCCESS';
+    } else if (runStatus.status === 'failed') {
+      console.log('❌ Test failed:', runStatus.last_error);
+      result.error = runStatus.last_error;
+      result.test_result = 'FAILED';
+    } else {
+      console.log('⏰ Test timed out, final status:', runStatus.status);
+      result.test_result = 'TIMEOUT';
+      result.issue = 'Run stuck in ' + runStatus.status + ' status';
+    }
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('🚨 Test error:', error);
+    res.json({
+      test_result: 'ERROR',
+      error: error.message,
+      error_type: error.name,
+      suggestion: 'Check OpenAI API key, account status, and billing'
+    });
+  }
+});
+
 // Debug endpoint to check assistant configuration
 app.get('/debug-assistant', async (req, res) => {
   try {
