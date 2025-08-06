@@ -19,43 +19,32 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Configure multer for file uploads - Memory optimized
+// Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { 
-    fileSize: 5 * 1024 * 1024, // Reduced to 5MB limit
-    files: 3 // Limit number of files
+    fileSize: 5 * 1024 * 1024,
+    files: 3
   }
 });
 
-// Intelligence keywords for market research
+// Intelligence keywords
 const INTELLIGENCE_KEYWORDS = [
-  // Brand Research
-  'brand', 'reputation', 'image', 'perception', 'trust', 'credibility', 'equity', 'positioning', 'awareness', 'recognition',
-  // Consumer Insights  
-  'sentiment', 'think', 'feel', 'opinion', 'saying', 'people', 'customers', 'users', 'consumers', 'audience',
-  // Market Research
-  'analysis', 'insights', 'research', 'market', 'trends', 'performance', 'growth', 'share', 'competitive',
-  // Product Research
-  'product', 'quality', 'features', 'benefits', 'performance', 'usability', 'design', 'innovation', 'effectiveness',
-  // Customer Experience
-  'satisfaction', 'experience', 'service', 'support', 'journey', 'feedback', 'reviews', 'ratings', 'complaints',
-  // Social Listening
-  'buzz', 'mentions', 'social', 'viral', 'trending', 'conversation', 'chatter', 'discussion', 'talking',
-  // Behavioral Research
-  'behavior', 'purchase', 'buying', 'loyalty', 'retention', 'advocacy', 'recommendation', 'word-of-mouth',
-  // Competitive Intelligence
-  'comparison', 'versus', 'vs', 'compete', 'competitor', 'alternative', 'benchmark', 'industry',
-  // Inquiry patterns
-  'about', 'understand', 'know', 'learn', 'tell', 'explain', 'information', 'details', 'facts'
+  'brand', 'reputation', 'image', 'perception', 'trust', 'credibility', 
+  'sentiment', 'think', 'feel', 'opinion', 'saying', 'people', 'customers',
+  'analysis', 'insights', 'research', 'market', 'trends', 'performance',
+  'product', 'quality', 'features', 'benefits', 'satisfaction', 'experience',
+  'buzz', 'mentions', 'social', 'viral', 'trending', 'conversation',
+  'behavior', 'purchase', 'buying', 'loyalty', 'retention', 'advocacy',
+  'comparison', 'versus', 'vs', 'compete', 'competitor', 'alternative',
+  'about', 'understand', 'know', 'learn', 'tell', 'explain', 'information'
 ];
 
-// Brand name mappings for better recognition
+// Brand mappings
 const BRAND_MAPPINGS = {
   'coke': 'Coca-Cola',
   'mcdonalds': "McDonald's", 
   'mcdonald': "McDonald's",
-  'mcds': "McDonald's",
   'apple': 'Apple',
   'iphone': 'iPhone',
   'tesla': 'Tesla',
@@ -63,64 +52,42 @@ const BRAND_MAPPINGS = {
   'starbucks': 'Starbucks',
   'amazon': 'Amazon',
   'google': 'Google',
-  'microsoft': 'Microsoft',
   'samsung': 'Samsung',
-  'bmw': 'BMW',
-  'toyota': 'Toyota',
-  'ford': 'Ford',
-  'pepsi': 'Pepsi',
-  'adidas': 'Adidas',
-  'walmart': 'Walmart',
-  'target': 'Target'
+  'bmw': 'BMW'
 };
 
-// Function to check if query needs intelligence analysis
+// Check if query needs intelligence
 function needsIntelligence(query) {
   const lowerQuery = query.toLowerCase();
+  const hasKeyword = INTELLIGENCE_KEYWORDS.some(keyword => lowerQuery.includes(keyword));
+  const hasBrand = Object.keys(BRAND_MAPPINGS).some(brand => lowerQuery.includes(brand));
   
-  // Check for intelligence keywords
-  const hasIntelligenceKeyword = INTELLIGENCE_KEYWORDS.some(keyword => lowerQuery.includes(keyword));
-  
-  // Check for brand names (if asking about a brand, likely needs intelligence)
-  const hasBrandName = Object.keys(BRAND_MAPPINGS).some(brand => lowerQuery.includes(brand));
-  
-  // Check for common intelligence patterns
-  const intelligencePatterns = [
+  const patterns = [
     /tell me about \w+/,
     /what.*think.*about/,
-    /how.*doing/,
     /understand.*\w+/,
-    /learn.*about/,
-    /information.*about/,
     /\w+ vs \w+/,
-    /\w+ versus \w+/,
-    /opinion.*\w+/,
-    /feedback.*\w+/,
-    /review.*\w+/
+    /opinion.*\w+/
   ];
   
-  const hasIntelligencePattern = intelligencePatterns.some(pattern => pattern.test(lowerQuery));
-  
-  return hasIntelligenceKeyword || hasBrandName || hasIntelligencePattern;
+  const hasPattern = patterns.some(pattern => pattern.test(lowerQuery));
+  return hasKeyword || hasBrand || hasPattern;
 }
 
-// Function to extract brand/product from query
+// Extract brand name
 function extractBrand(query) {
   let lowerQuery = query.toLowerCase();
   
-  // Check for known brand mappings first
   for (const [key, value] of Object.entries(BRAND_MAPPINGS)) {
     if (lowerQuery.includes(key)) {
       return value;
     }
   }
   
-  // Remove common words to isolate brand name
   const removeWords = [
-    'what', 'are', 'people', 'saying', 'about', 'brand', 'sentiment', 'analysis', 
-    'of', 'the', 'how', 'is', 'do', 'customers', 'think', 'tell', 'me', 'understand',
-    'want', 'to', 'know', 'learn', 'information', 'details', 'facts', 'explain',
-    'you', 'can', 'help', 'with', 'regarding', 'concerning', 'company', 'product'
+    'what', 'are', 'people', 'saying', 'about', 'brand', 'sentiment', 
+    'analysis', 'of', 'the', 'how', 'is', 'do', 'customers', 'think', 
+    'tell', 'me', 'understand', 'want', 'to', 'know', 'learn'
   ];
   
   let brandName = lowerQuery;
@@ -128,7 +95,6 @@ function extractBrand(query) {
     brandName = brandName.replace(new RegExp('\\b' + word + '\\b', 'g'), '');
   });
   
-  // Clean up and capitalize
   brandName = brandName.trim().replace(/\s+/g, ' ');
   if (brandName) {
     return brandName.split(' ').map(word => 
@@ -139,184 +105,48 @@ function extractBrand(query) {
   return 'Brand/Product';
 }
 
-// Function to get brand/product description
+// Get brand description
 function getBrandDescription(brandName) {
   const descriptions = {
-    'Coca-Cola': 'Coca-Cola is a carbonated soft drink manufactured by The Coca-Cola Company. Founded in 1886, it\'s one of the world\'s most recognizable brands and the leading cola beverage globally.',
-    'Nike': 'Nike is an American multinational corporation specializing in athletic footwear, apparel, equipment, and accessories. Founded in 1964, it\'s one of the world\'s largest suppliers of athletic shoes and apparel.',
-    'Tesla': 'Tesla is an American electric vehicle and clean energy company founded by Elon Musk. Known for electric cars, energy storage systems, and solar panels, Tesla has revolutionized the automotive industry.',
-    'Apple': 'Apple Inc. is a multinational technology company that designs and manufactures consumer electronics, software, and online services. Known for iPhone, iPad, Mac computers, and innovative design.',
-    'McDonald\'s': 'McDonald\'s is an American fast food company and the world\'s largest restaurant chain by revenue. Founded in 1940, it serves approximately 69 million customers daily in over 100 countries.',
-    'Starbucks': 'Starbucks Corporation is an American multinational chain of coffeehouses and roastery reserves. Founded in 1971, it\'s the world\'s largest coffeehouse chain with over 30,000 locations worldwide.',
-    'Amazon': 'Amazon is an American multinational technology company focusing on e-commerce, cloud computing, and artificial intelligence. Started as an online bookstore, it\'s now one of the world\'s largest companies.',
-    'Samsung': 'Samsung is a South Korean multinational conglomerate known for electronics, semiconductors, and smartphones. It\'s one of the world\'s largest technology companies and smartphone manufacturers.',
-    'BMW': 'BMW (Bayerische Motoren Werke) is a German multinational corporation producing luxury vehicles and motorcycles. Founded in 1916, it\'s known for premium cars and innovative automotive technology.',
-    'Google': 'Google is an American multinational technology company specializing in Internet-related services and products, including search engines, cloud computing, and advertising technologies.'
+    'Coca-Cola': 'Coca-Cola is a carbonated soft drink manufactured by The Coca-Cola Company. Founded in 1886, it is one of the world\'s most recognizable brands.',
+    'Nike': 'Nike is an American multinational corporation specializing in athletic footwear, apparel, equipment, and accessories.',
+    'Tesla': 'Tesla is an American electric vehicle and clean energy company founded by Elon Musk, known for revolutionizing the automotive industry.',
+    'Apple': 'Apple Inc. is a multinational technology company that designs and manufactures consumer electronics, software, and online services.',
+    'McDonald\'s': 'McDonald\'s is an American fast food company and the world\'s largest restaurant chain by revenue.',
+    'Starbucks': 'Starbucks Corporation is an American multinational chain of coffeehouses and the world\'s largest coffeehouse chain.',
+    'Amazon': 'Amazon is an American multinational technology company focusing on e-commerce, cloud computing, and artificial intelligence.',
+    'Samsung': 'Samsung is a South Korean multinational conglomerate known for electronics, semiconductors, and smartphones.',
+    'BMW': 'BMW is a German multinational corporation producing luxury vehicles and motorcycles.',
+    'Google': 'Google is an American multinational technology company specializing in Internet-related services and products.'
   };
   
-  return descriptions[brandName] || (brandName + ' is a brand/product that has gained attention in the market. Let me analyze what people are saying about it.');
+  return descriptions[brandName] || brandName + ' is a brand/product that has gained attention in the market.';
 }
 
-// Function to determine response type based on query
+// Determine response type
 function determineResponseType(query) {
   const lowerQuery = query.toLowerCase();
   
-  // Conversational queries - respond naturally
-  if (lowerQuery.includes('what do you think') || lowerQuery.includes('your opinion') || lowerQuery.includes('tell me about')) {
+  if (lowerQuery.includes('what do you think') || lowerQuery.includes('tell me about')) {
     return 'conversational';
   }
   
-  // Specific analysis requests - offer options
   if (lowerQuery.includes('analysis') || lowerQuery.includes('research') || lowerQuery.includes('report')) {
     return 'analysis_options';
   }
   
-  // Comparison queries - direct comparison format
-  if (lowerQuery.includes('vs') || lowerQuery.includes('versus') || lowerQuery.includes('comparison')) {
+  if (lowerQuery.includes('vs') || lowerQuery.includes('versus')) {
     return 'comparison';
   }
   
-  // General brand inquiry - provide context first
   return 'brand_context';
 }
 
-// Function to create conversational response
-function createConversationalResponse(data) {
-  const brand = data.brand;
-  const description = getBrandDescription(brand);
-  
-  let response = '**About ' + brand + ':**\n' + description + '\n\n';
-  
-  response += '**What People Are Saying:**\n';
-  response += 'Based on my analysis of ' + data.totalMentions + ' mentions across social media, reviews, and news sources, ';
-  
-  if (data.positive > 70) {
-    response += brand + ' enjoys very positive sentiment (' + data.positive + '%) among consumers. ';
-  } else if (data.positive > 50) {
-    response += brand + ' has generally positive sentiment (' + data.positive + '%) with some mixed opinions. ';
-  } else {
-    response += brand + ' shows mixed sentiment (' + data.positive + '% positive) with areas for improvement. ';
-  }
-  
-  response += 'The main conversation themes include ' + data.sources[0].themes.join(', ') + '.';
-  
-  response += `\n\n**Key Insights:**\n`;
-  data.insights.forEach(insight => {
-    response += `• ${insight}\n`;
-  });
-  
-  response += `\n\n**Would you like me to:**\n`;
-  response += '<button onclick="requestFormat(\'detailed research report\')" style="background:#007bff;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Generate detailed report</button>\n';
-  response += '<button onclick="requestFormat(\'visual sentiment breakdown\')" style="background:#28a745;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Show visual dashboard</button>\n';
-  response += '<button onclick="requestFormat(\'strategic recommendations\')" style="background:#17a2b8;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Get recommendations</button>\n';
-  response += '<button onclick="requestFormat(\'conversational analysis\')" style="background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Discuss insights</button>\n\n';
-  response += 'Or just ask me anything specific about ' + brand + '!';
-  
-// Function to create executive summary
-function createExecutiveSummary(data) {
-  const brand = data.brand;
-  const description = getBrandDescription(brand);
-  
-  let response = '**Executive Summary: ' + brand + '**\n\n';
-  response += '**Company Overview:** ' + description + '\n\n';
-  
-  response += '**Key Findings:**\n';
-  response += '• Overall sentiment: ' + data.positive + '% positive (' + data.totalMentions + ' total mentions)\n';
-  response += '• Primary sentiment drivers: ' + data.sources[0].themes.join(', ') + '\n';
-  response += '• Market position: ' + (data.positive > 75 ? 'Strong positive' : data.positive > 60 ? 'Moderately positive' : 'Mixed') + ' consumer perception\n\n';
-  
-  response += `**Strategic Implications:**\n`;
-  data.recommendations.slice(0, 2).forEach(rec => {
-    response += `• ${rec}\n`;
-  });
-  
-  response += `\n📄 For detailed analysis, ask for "full report" or "visual dashboard"`;
-  
-  return response;
-}
-
-// Function to create bullet point analysis
-function createBulletPointAnalysis(data) {
-  const brand = data.brand;
-  
-  let response = '**' + brand + ' - Quick Analysis**\n\n';
-  
-  response += '**📊 Sentiment Breakdown:**\n';
-  response += '• Positive: ' + data.positive + '%\n';
-  response += '• Neutral: ' + data.neutral + '%\n';
-  response += '• Negative: ' + data.negative + '%\n';
-  response += '• Total mentions: ' + data.totalMentions + '\n\n';
-  
-  response += `**🌐 Top Sources:**\n`;
-  data.sources.forEach(source => {
-    response += `• ${source.platform}: ${source.mentions} mentions (${source.sentiment})\n`;
-  });
-  
-  response += `\n**💡 Key Insights:**\n`;
-  data.insights.forEach(insight => {
-    response += `• ${insight}\n`;
-  });
-  
-  response += `\n**🎯 Next Steps:**\n`;
-  data.recommendations.forEach(rec => {
-    response += `• ${rec}\n`;
-  });
-  
-  response += `\n📋 Ask for "detailed report" for comprehensive analysis`;
-  
-  return response;
-}
-
-// Function to create analysis options response
-function createAnalysisOptionsResponse(data) {
-  const brand = data.brand;
-  const description = getBrandDescription(brand);
-  
-  let response = '**' + brand + ' Overview:**\n' + description + '\n\n';
-  
-  response += 'I can provide different types of analysis for ' + brand + '. What would you prefer?\n\n';
-  
-  response += '<button onclick="requestFormat(\'quick sentiment summary\')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Quick Sentiment Summary</button> ';
-  response += '<button onclick="requestFormat(\'detailed research report\')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📋 Detailed Research Report</button>\n';
-  response += '<button onclick="requestFormat(\'conversational analysis\')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">💬 Conversational Analysis</button> ';
-  response += '<button onclick="requestFormat(\'visual dashboard\')" style="background:#6f42c1;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📈 Visual Dashboard</button>\n\n';
-  
-  response += '**Custom Formats:**\n';
-  response += '<button onclick="requestFormat(\'executive summary\')" style="background:#fd7e14;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Executive Summary</button> ';
-  response += '<button onclick="requestFormat(\'bullet points\')" style="background:#20c997;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Bullet Points</button> ';
-  response += '<button onclick="requestFormat(\'narrative style\')" style="background:#e83e8c;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Narrative Style</button>\n\n';
-  
-  response += 'What type of analysis and format would work best for you?';
-  
-  return response;
-}
-
-// Function to create brand context response
-function createBrandContextResponse(data) {
-  const brand = data.brand;
-  const description = getBrandDescription(brand);
-  
-  let response = '**' + brand + '**\n' + description + '\n\n';
-  
-  response += '**Current Market Sentiment:** ' + data.positive + '% positive sentiment from ' + data.totalMentions + ' mentions\n\n';
-  
-  response += 'I can help you understand ' + brand + ' better. What specifically interests you?\n\n';
-  response += '<button onclick="quickAnalysis(\'' + brand + '\', \'brand\')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🏢 Brand Analysis</button> ';
-  response += '<button onclick="quickAnalysis(\'' + brand + '\', \'customer sentiment\')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">👥 Customer Sentiment</button>\n';
-  response += '<button onclick="quickAnalysis(\'' + brand + '\', \'market performance\')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Market Performance</button> ';
-  response += '<button onclick="requestFormat(\'full analysis\')" style="background:#dc3545;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🔍 Full Analysis</button>\n\n';
-  
-  response += 'Or just ask me anything specific about ' + brand + '!';
-  
-  return response;
-}
-
-// Function to generate mock intelligence data
+// Generate intelligence data
 function generateIntelligenceData(query) {
   const brand = extractBrand(query);
   const responseType = determineResponseType(query);
   
-  // Generate realistic but varied data
   const basePositive = 65 + Math.floor(Math.random() * 20);
   const baseNeutral = Math.floor(Math.random() * 20) + 10;
   const baseNegative = 100 - basePositive - baseNeutral;
@@ -340,98 +170,122 @@ function generateIntelligenceData(query) {
         platform: 'Reddit',
         mentions: redditMentions,
         sentiment: 'positive',
-        url: 'https://www.reddit.com/search/?q=' + encodeURIComponent(brand),
-        themes: ['brand perception', 'user discussions']
+        url: 'https://www.reddit.com/search/?q=' + encodeURIComponent(brand)
       },
       {
-        platform: 'Product Reviews',
+        platform: 'Reviews',
         mentions: reviewMentions,
         sentiment: 'positive',
-        url: 'https://www.google.com/search?q=' + encodeURIComponent(brand + ' reviews'),
-        themes: ['satisfaction', 'recommendations']
+        url: 'https://www.google.com/search?q=' + encodeURIComponent(brand + ' reviews')
       },
       {
         platform: 'Social Media',
         mentions: socialMentions,
         sentiment: 'mixed',
-        url: 'https://twitter.com/search?q=' + encodeURIComponent(brand),
-        themes: ['brand awareness', 'social buzz']
+        url: 'https://twitter.com/search?q=' + encodeURIComponent(brand)
       },
       {
-        platform: 'News & Media',
+        platform: 'News',
         mentions: newsMentions,
         sentiment: 'neutral',
-        url: 'https://news.google.com/search?q=' + encodeURIComponent(brand),
-        themes: ['PR coverage', 'announcements']
+        url: 'https://news.google.com/search?q=' + encodeURIComponent(brand)
       }
     ],
-    insights: generateInsights(brand, responseType, basePositive),
-    recommendations: generateRecommendations(brand, responseType, basePositive),
     reportId: Date.now().toString()
   };
 }
 
-// Function to generate insights based on response type
-function generateInsights(brand, responseType, sentiment) {
-  const insights = [];
+// Create conversational response
+function createConversationalResponse(data) {
+  const brand = data.brand;
+  const description = getBrandDescription(brand);
   
-  if (responseType === 'conversational' || responseType === 'brand_context') {
-    insights.push(brand + ' shows ' + (sentiment > 75 ? 'excellent' : sentiment > 60 ? 'good' : 'mixed') + ' market sentiment across digital platforms');
-    insights.push('Consumer discussions indicate strong brand recognition and engagement');
-    insights.push('Social media presence drives significant portion of brand conversations');
-  } else if (responseType === 'analysis_options') {
-    insights.push('Comprehensive data available across multiple consumer touchpoints');
-    insights.push('Brand performance metrics show consistent patterns over time');
-    insights.push('Multiple analysis formats available to suit different business needs');
-  } else if (responseType === 'comparison') {
-    insights.push('Competitive positioning analysis reveals distinct market advantages');
-    insights.push('Brand differentiation clearly perceived by target consumers');
-    insights.push('Market share dynamics indicate strategic opportunities');
+  let response = '**About ' + brand + ':**\n' + description + '\n\n';
+  
+  response += '**What People Are Saying:**\n';
+  response += 'Based on my analysis of ' + data.totalMentions + ' mentions across social media, reviews, and news sources, ';
+  
+  if (data.positive > 70) {
+    response += brand + ' enjoys very positive sentiment (' + data.positive + '%) among consumers.';
+  } else if (data.positive > 50) {
+    response += brand + ' has generally positive sentiment (' + data.positive + '%) with some mixed opinions.';
   } else {
-    insights.push('Overall market sentiment trending positive');
-    insights.push('Brand mentions showing consistent growth');
-    insights.push('Consumer engagement levels above industry benchmarks');
+    response += brand + ' shows mixed sentiment (' + data.positive + '% positive) with areas for improvement.';
   }
   
-  return insights;
+  response += '\n\n**Key Insights:**\n';
+  response += '• ' + brand + ' shows strong market presence across digital platforms\n';
+  response += '• Consumer discussions indicate good brand recognition\n';
+  response += '• Social media engagement drives brand conversations\n';
+  
+  response += '\n**Would you like me to:**\n';
+  response += '🔍 Generate a detailed research report\n';
+  response += '📊 Show visual sentiment breakdown\n';
+  response += '📈 Provide strategic recommendations\n';
+  response += '💬 Discuss specific aspects\n\n';
+  response += 'Just let me know what interests you most!';
+  
+  return response;
 }
 
-// Function to generate recommendations
-function generateRecommendations(brand, responseType, sentiment) {
-  const recommendations = [];
+// Create analysis options response
+function createAnalysisOptionsResponse(data) {
+  const brand = data.brand;
+  const description = getBrandDescription(brand);
   
-  if (sentiment > 75) {
-    recommendations.push('Leverage positive sentiment in marketing campaigns and brand messaging');
-    recommendations.push('Expand market presence while maintaining current quality standards');
-    recommendations.push('Develop brand advocacy programs to amplify positive word-of-mouth');
-  } else if (sentiment > 60) {
-    recommendations.push('Focus on converting neutral sentiment segments through targeted messaging');
-    recommendations.push('Enhance customer experience at key brand touchpoints');
-    recommendations.push('Strengthen brand differentiation in competitive messaging');
-  } else {
-    recommendations.push('Implement comprehensive reputation management strategy');
-    recommendations.push('Address core issues driving negative sentiment patterns');
-    recommendations.push('Develop crisis communication protocols for brand recovery');
-  }
+  let response = '**' + brand + ' Overview:**\n' + description + '\n\n';
   
-  return recommendations;
+  response += 'I can provide different types of analysis for ' + brand + '. What would you prefer?\n\n';
+  
+  response += '**📊 Quick Sentiment Summary** - Key sentiment metrics and insights\n';
+  response += '**📋 Detailed Research Report** - Comprehensive analysis with sources\n';
+  response += '**💬 Conversational Analysis** - Natural discussion about brand perception\n';
+  response += '**📈 Visual Dashboard** - Interactive charts and progress bars\n\n';
+  
+  response += '**Custom Formats:**\n';
+  response += '• Executive Summary (brief, business-focused)\n';
+  response += '• Bullet Points (easy to scan)\n';
+  response += '• Narrative Style (story-like analysis)\n';
+  response += '• Data-Heavy (lots of numbers and metrics)\n\n';
+  
+  response += 'What type of analysis and format would work best for you?';
+  
+  return response;
 }
 
-// Function to create HTML for intelligence display
+// Create brand context response
+function createBrandContextResponse(data) {
+  const brand = data.brand;
+  const description = getBrandDescription(brand);
+  
+  let response = '**' + brand + '**\n' + description + '\n\n';
+  
+  response += '**Current Market Sentiment:** ' + data.positive + '% positive sentiment from ' + data.totalMentions + ' mentions\n\n';
+  
+  response += 'I can help you understand ' + brand + ' better. What specifically interests you?\n\n';
+  response += '🏢 **Brand Analysis** - Reputation, perception, market position\n';
+  response += '👥 **Customer Sentiment** - What people really think\n';
+  response += '📊 **Market Performance** - Trends and competitive position\n';
+  response += '🔍 **Detailed Research** - Comprehensive intelligence report\n';
+  response += '💡 **Strategic Insights** - Recommendations and opportunities\n\n';
+  
+  response += 'Just ask me about any aspect that interests you, or say "full analysis" for a complete report!';
+  
+  return response;
+}
+
+// Create HTML intelligence report
 function createIntelligenceHTML(data) {
   let html = '<div class="intelligence-report">';
   
-  // Header
   html += '<div class="report-header">';
   html += '<h2>📊 ' + data.brand + ' - Market Intelligence Report</h2>';
   html += '</div>';
   
-  // Sentiment Overview
   html += '<div class="sentiment-section">';
   html += '<h3>💖 Sentiment Overview</h3>';
   html += '<div class="sentiment-bars">';
   
-  // Positive bar
   html += '<div class="sentiment-bar">';
   html += '<span class="sentiment-label">[' + data.positive + '%] Positive</span>';
   html += '<div class="progress-bar">';
@@ -439,7 +293,6 @@ function createIntelligenceHTML(data) {
   html += '</div>';
   html += '</div>';
   
-  // Neutral bar
   html += '<div class="sentiment-bar">';
   html += '<span class="sentiment-label">[' + data.neutral + '%] Neutral</span>';
   html += '<div class="progress-bar">';
@@ -447,7 +300,6 @@ function createIntelligenceHTML(data) {
   html += '</div>';
   html += '</div>';
   
-  // Negative bar
   html += '<div class="sentiment-bar">';
   html += '<span class="sentiment-label">[' + data.negative + '%] Negative</span>';
   html += '<div class="progress-bar">';
@@ -459,16 +311,14 @@ function createIntelligenceHTML(data) {
   html += '</div>';
   html += '</div>';
   
-  // Data Sources
   html += '<div class="sources-section">';
   html += '<h3>🌐 Data Sources</h3>';
   html += '<div class="sources-grid">';
   
-  data.sources.forEach(function(source, index) {
+  data.sources.forEach(function(source) {
     html += '<div class="source-card">';
     html += '<div class="source-platform">📱 <strong>' + source.platform + '</strong></div>';
     html += '<div class="source-mentions">' + source.mentions + ' mentions</div>';
-    html += '<div class="source-themes">Themes: ' + source.themes.join(', ') + '</div>';
     html += '<a href="' + source.url + '" target="_blank" class="source-link">View Source</a>';
     html += '</div>';
   });
@@ -476,27 +326,24 @@ function createIntelligenceHTML(data) {
   html += '</div>';
   html += '</div>';
   
-  // Research Insights
   html += '<div class="insights-section">';
   html += '<h3>🔍 Research Insights</h3>';
   html += '<ul class="insights-list">';
-  data.insights.forEach(function(insight) {
-    html += '<li>- ' + insight + '</li>';
-  });
+  html += '<li>- Strong market presence with ' + data.positive + '% positive sentiment</li>';
+  html += '<li>- Brand recognition indicates good consumer awareness</li>';
+  html += '<li>- Digital engagement showing positive trends</li>';
   html += '</ul>';
   html += '</div>';
   
-  // Strategic Recommendations
   html += '<div class="recommendations-section">';
   html += '<h3>💡 Strategic Recommendations</h3>';
   html += '<ul class="recommendations-list">';
-  data.recommendations.forEach(function(rec) {
-    html += '<li>→ ' + rec + '</li>';
-  });
+  html += '<li>→ Leverage positive sentiment in marketing campaigns</li>';
+  html += '<li>→ Enhance digital presence to capture more audience</li>';
+  html += '<li>→ Monitor competitive landscape for opportunities</li>';
   html += '</ul>';
   html += '</div>';
   
-  // PDF Download
   html += '<div class="report-actions">';
   html += '<button class="download-btn" onclick="downloadReport(\'' + data.reportId + '\')">📄 Download PDF Report</button>';
   html += '</div>';
@@ -506,10 +353,9 @@ function createIntelligenceHTML(data) {
   return html;
 }
 
-// Route: Main chat interface
+// Main chat interface
 app.get('/', (req, res) => {
-  const html = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -685,7 +531,6 @@ app.get('/', (req, res) => {
             background: #0056b3;
         }
 
-        /* Intelligence Report Styles */
         .intelligence-report {
             font-size: 14px;
             line-height: 1.5;
@@ -759,7 +604,7 @@ app.get('/', (req, res) => {
 
         .sources-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 10px;
         }
 
@@ -776,12 +621,6 @@ app.get('/', (req, res) => {
         }
 
         .source-mentions {
-            color: #6c757d;
-            margin-bottom: 5px;
-        }
-
-        .source-themes {
-            font-size: 12px;
             color: #6c757d;
             margin-bottom: 8px;
         }
@@ -972,28 +811,12 @@ app.get('/', (req, res) => {
             window.open('/download-report/' + reportId, '_blank');
         }
 
-        function requestFormat(format) {
-            console.log('Requesting format:', format);
-            const input = document.getElementById('messageInput');
-            input.value = format;
-            sendMessage();
-        }
-
-        function quickAnalysis(brand, type) {
-            console.log('Quick analysis for:', brand, type);
-            const input = document.getElementById('messageInput');
-            input.value = type + ' analysis for ' + brand;
-            sendMessage();
-        }
-
-        // File upload handling
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const files = event.target.files;
             if (files.length > 0) {
                 const fileNames = Array.from(files).map(file => file.name).join(', ');
                 addMessage('user', '📁 Uploaded files: ' + fileNames);
                 
-                // You can implement file upload logic here
                 addMessage('assistant', 'Files received! I can analyze documents for sentiment, extract insights, and generate reports. What would you like me to do with these files?');
             }
         });
@@ -1006,88 +829,50 @@ app.get('/', (req, res) => {
   res.send(html);
 });
 
-// Route: Handle chat messages
+// Handle chat messages
 app.post('/chat', async (req, res) => {
   try {
     const { message } = req.body;
     console.log('Received message:', message);
     
-    // Check if this needs intelligence analysis
     if (needsIntelligence(message)) {
       console.log('Intelligence analysis needed');
       const intelligenceData = generateIntelligenceData(message);
       
-      // Store report data for potential PDF generation
       global.reportData = global.reportData || {};
       global.reportData[intelligenceData.reportId] = intelligenceData;
       
-      // Cleanup old reports to prevent memory leaks
       const reportKeys = Object.keys(global.reportData);
       if (reportKeys.length > 50) {
         const oldestKey = reportKeys[0];
         delete global.reportData[oldestKey];
       }
       
-      // Determine response format based on query type
       let response;
       
-      switch (intelligenceData.responseType) {
-        case 'conversational':
-          response = createConversationalResponse(intelligenceData);
-          break;
-        case 'analysis_options':
-          response = createAnalysisOptionsResponse(intelligenceData);
-          break;
-        case 'brand_context':
-          response = createBrandContextResponse(intelligenceData);
-          break;
-        case 'comparison':
-          // For comparisons, create detailed HTML report
-          response = createIntelligenceHTML(intelligenceData);
-          break;
-        default:
-          response = createBrandContextResponse(intelligenceData);
+      if (intelligenceData.responseType === 'conversational') {
+        response = createConversationalResponse(intelligenceData);
+      } else if (intelligenceData.responseType === 'analysis_options') {
+        response = createAnalysisOptionsResponse(intelligenceData);
+      } else if (intelligenceData.responseType === 'comparison') {
+        response = createIntelligenceHTML(intelligenceData);
+      } else {
+        response = createBrandContextResponse(intelligenceData);
       }
       
-      // Store the format preference for follow-up questions
-      global.userPreferences = global.userPreferences || {};
-      global.userPreferences[intelligenceData.reportId] = {
-        brand: intelligenceData.brand,
-        lastQuery: message,
-        responseType: intelligenceData.responseType
-      };
-      
       res.json({ response: response });
-      } else {
-        console.log('Regular chat needed');
-        
-        // Check if this is a follow-up format request
-        const formatRequests = ['detailed report', 'full analysis', 'visual dashboard', 'executive summary', 'bullet points', 'narrative style', 'conversational analysis'];
-        const isFormatRequest = formatRequests.some(format => message.toLowerCase().includes(format));
-        
-        if (isFormatRequest && global.userPreferences) {
-          // Handle format request for previous brand analysis
-          const lastPreference = Object.values(global.userPreferences).pop();
-          if (lastPreference) {
-            const mockData = generateIntelligenceData(`${message} ${lastPreference.brand}`);
-            
-            if (message.toLowerCase().includes('detailed report') || message.toLowerCase().includes('full analysis')) {
-              const htmlResponse = createIntelligenceHTML(mockData);
-              return res.json({ response: htmlResponse });
-            } else if (message.toLowerCase().includes('conversational')) {
-              const conversationalResponse = createConversationalResponse(mockData);
-              return res.json({ response: conversationalResponse });
-            } else if (message.toLowerCase().includes('executive summary')) {
-              const summaryResponse = createExecutiveSummary(mockData);
-              return res.json({ response: summaryResponse });
-            } else if (message.toLowerCase().includes('bullet points')) {
-              const bulletResponse = createBulletPointAnalysis(mockData);
-              return res.json({ response: bulletResponse });
-            }
-          }
-        }
-        
-        // Regular OpenAI Assistant conversation
+    } else {
+      console.log('Regular chat needed');
+      
+      const formatRequests = ['detailed report', 'full analysis', 'visual dashboard', 'executive summary', 'bullet points'];
+      const isFormatRequest = formatRequests.some(format => message.toLowerCase().includes(format));
+      
+      if (isFormatRequest) {
+        const mockData = generateIntelligenceData('brand analysis');
+        const htmlResponse = createIntelligenceHTML(mockData);
+        return res.json({ response: htmlResponse });
+      }
+      
       try {
         const thread = await openai.beta.threads.create();
         
@@ -1100,17 +885,15 @@ app.post('/chat', async (req, res) => {
           assistant_id: ASSISTANT_ID
         });
 
-        // Wait for completion with longer timeout and better error handling
         let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         let attempts = 0;
-        const maxAttempts = 60; // Increased timeout to 60 seconds
+        const maxAttempts = 60;
         
         while (runStatus.status === 'in_progress' && attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
           attempts++;
           
-          // Log progress every 10 seconds
           if (attempts % 10 === 0) {
             console.log('Assistant still processing... attempt', attempts);
           }
@@ -1124,7 +907,6 @@ app.post('/chat', async (req, res) => {
             console.log('Assistant response received');
             res.json({ response: assistantMessage.content[0].text.value });
           } else {
-            console.log('Assistant response empty, using fallback');
             res.json({ response: "I'm here to help with market intelligence and any questions you have. What would you like to know?" });
           }
         } else if (runStatus.status === 'failed') {
@@ -1137,7 +919,6 @@ app.post('/chat', async (req, res) => {
       } catch (error) {
         console.error('OpenAI error:', error.message);
         
-        // Try direct completion as fallback
         try {
           const completion = await openai.chat.completions.create({
             model: "gpt-3.5-turbo",
@@ -1173,7 +954,7 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-// Route: Download PDF report
+// Download PDF report
 app.get('/download-report/:reportId', (req, res) => {
   try {
     const reportId = req.params.reportId;
@@ -1183,27 +964,23 @@ app.get('/download-report/:reportId', (req, res) => {
       return res.status(404).send('Report not found');
     }
 
-    // Create PDF
     const doc = new PDFDocument();
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="' + reportData.brand + '-intelligence-report.pdf"');
     
     doc.pipe(res);
     
-    // PDF Content
     doc.fontSize(20).text('Market Intelligence Report', 50, 50);
-    doc.fontSize(16).text(reportData.brand + ' - ' + reportData.researchType, 50, 80);
+    doc.fontSize(16).text(reportData.brand + ' - Market Analysis', 50, 80);
     doc.fontSize(12).text('Generated on: ' + new Date().toLocaleDateString(), 50, 105);
     
     doc.moveDown(2);
     
-    // Executive Summary
     doc.fontSize(14).text('Executive Summary', 50, doc.y);
-    doc.fontSize(10).text('This report provides comprehensive market intelligence analysis for ' + reportData.brand + ' based on consumer sentiment, brand perception, and market positioning data.', 50, doc.y + 15);
+    doc.fontSize(10).text('This report provides comprehensive market intelligence analysis for ' + reportData.brand + ' based on consumer sentiment and market positioning data.', 50, doc.y + 15);
     
     doc.moveDown(2);
     
-    // Sentiment Analysis
     doc.fontSize(14).text('Sentiment Analysis', 50, doc.y);
     doc.fontSize(10);
     doc.text('Positive Sentiment: ' + reportData.positive + '%', 70, doc.y + 15);
@@ -1213,7 +990,6 @@ app.get('/download-report/:reportId', (req, res) => {
     
     doc.moveDown(2);
     
-    // Data Sources
     doc.fontSize(14).text('Data Sources', 50, doc.y);
     reportData.sources.forEach(function(source) {
       doc.fontSize(10);
@@ -1222,19 +998,17 @@ app.get('/download-report/:reportId', (req, res) => {
     
     doc.moveDown(2);
     
-    // Key Insights
     doc.fontSize(14).text('Key Insights', 50, doc.y);
-    reportData.insights.forEach(function(insight) {
-      doc.fontSize(10).text('• ' + insight, 70, doc.y + 15);
-    });
+    doc.fontSize(10).text('• Strong market presence with positive sentiment trends', 70, doc.y + 15);
+    doc.text('• Brand recognition indicates good consumer awareness', 70, doc.y + 10);
+    doc.text('• Digital engagement showing positive patterns', 70, doc.y + 10);
     
     doc.moveDown(2);
     
-    // Recommendations
     doc.fontSize(14).text('Strategic Recommendations', 50, doc.y);
-    reportData.recommendations.forEach(function(rec) {
-      doc.fontSize(10).text('• ' + rec, 70, doc.y + 15);
-    });
+    doc.fontSize(10).text('• Leverage positive sentiment in marketing campaigns', 70, doc.y + 15);
+    doc.text('• Enhance digital presence to capture more audience', 70, doc.y + 10);
+    doc.text('• Monitor competitive landscape for opportunities', 70, doc.y + 10);
     
     doc.end();
   } catch (error) {
@@ -1243,7 +1017,7 @@ app.get('/download-report/:reportId', (req, res) => {
   }
 });
 
-// Route: File upload handling
+// File upload handling
 app.post('/upload', upload.array('files'), (req, res) => {
   try {
     const files = req.files;
@@ -1260,12 +1034,17 @@ app.post('/upload', upload.array('files'), (req, res) => {
   }
 });
 
-// Route: Health check
+// Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    port: port
+  });
 });
 
-// Route: Favicon
+// Favicon
 app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
@@ -1276,14 +1055,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server - Railway requires binding to 0.0.0.0
-app.listen(port, '0.0.0.0', () => {
-  console.log('InsightEar GPT server running on port', port);
-  console.log('Server bound to 0.0.0.0:' + port);
-  console.log('Ready for market intelligence!');
-});
-
-// Graceful shutdown handling
+// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('Received SIGTERM, shutting down gracefully');
   process.exit(0);
@@ -1292,6 +1064,13 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('Received SIGINT, shutting down gracefully');
   process.exit(0);
+});
+
+// Start server
+app.listen(port, '0.0.0.0', () => {
+  console.log('InsightEar GPT server running on port', port);
+  console.log('Server bound to 0.0.0.0:' + port);
+  console.log('Ready for market intelligence!');
 });
 
 module.exports = app;
