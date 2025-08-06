@@ -314,7 +314,150 @@ app.post('/chat', async (req, res) => {
         const { message, files } = req.body;
         console.log('\n📝 User message: "' + message + '"');
         
-        // Handle PDF requests and context-aware responses
+// INTELLIGENT QUERY CLASSIFICATION
+function shouldUseWebSearch(message) {
+    const msg = message.toLowerCase().trim();
+    
+    // Always bypass web search for these patterns
+    const conversationalPatterns = [
+        // Greetings and basic interactions
+        /^(hi|hello|hey|howdy|sup|yo)$/,
+        /^(hi |hello |hey )/,
+        
+        // Questions about the assistant itself
+        /what can you/,
+        /what do you/,
+        /who are you/,
+        /help me/,
+        /how do you/,
+        /what are your/,
+        /can you help/,
+        /what is your/,
+        
+        // General knowledge queries
+        /what is [a-z]/,
+        /explain /,
+        /define /,
+        /how does /,
+        /why do /,
+        /tell me about (ai|artificial intelligence|machine learning|technology)/,
+        
+        // Simple questions
+        /thank you/,
+        /thanks/,
+        /ok/,
+        /okay/,
+        /good/,
+        /great/,
+        /awesome/,
+        
+        // PDF and file related
+        /pdf/,
+        /report/,
+        /download/,
+        /file/,
+        /document/
+    ];
+    
+    // Check if it matches conversational patterns
+    if (conversationalPatterns.some(pattern => pattern.test(msg))) {
+        return false;
+    }
+    
+    // Market research indicators (these SHOULD use web search)
+    const marketResearchPatterns = [
+        // Brand/company analysis
+        /brand sentiment/,
+        /customer feedback/,
+        /market trends/,
+        /consumer insights/,
+        /competitive analysis/,
+        
+        // Opinion queries about brands/products
+        /what (are people|do people|do customers) (saying|think|feel)/,
+        /people saying about/,
+        /opinions about/,
+        /reviews of/,
+        /sentiment about/,
+        
+        // Business intelligence
+        /market analysis/,
+        /industry trends/,
+        /consumer behavior/,
+        /brand reputation/,
+        
+        // Product/service research
+        /(analyze|research) [a-z]/,
+        /trends in [a-z]/,
+        /market for [a-z]/
+    ];
+    
+    // Check if it needs market research
+    if (marketResearchPatterns.some(pattern => pattern.test(msg))) {
+        return true;
+    }
+    
+    // Known brands/companies (these should trigger web search)
+    const knownBrands = [
+        'nike', 'apple', 'google', 'amazon', 'microsoft', 'tesla', 'coca-cola', 'coke', 
+        'pepsi', 'starbucks', 'mcdonald', 'burger king', 'walmart', 'target', 'costco',
+        'kirkland', 'samsung', 'iphone', 'android', 'facebook', 'meta', 'twitter', 'x',
+        'netflix', 'disney', 'uber', 'lyft', 'airbnb', 'booking', 'expedia', 'marriott',
+        'hilton', 'ford', 'toyota', 'honda', 'bmw', 'mercedes', 'audi', 'volkswagen',
+        'humana', 'kaiser', 'aetna', 'anthem', 'cigna', 'unitedhealthcare'
+    ];
+    
+    // Check if message mentions known brands
+    const mentionsBrand = knownBrands.some(brand => msg.includes(brand));
+    if (mentionsBrand) {
+        return true;
+    }
+    
+    // Default: no web search for general conversation
+    return false;
+}
+
+// Enhanced conversation handler for non-market queries
+function handleConversationalQuery(message) {
+    const msg = message.toLowerCase().trim();
+    
+    // Capability questions
+    if (msg.includes('what can you') || msg.includes('what do you') || msg.includes('help me')) {
+        return `I'm InsightEar GPT, your market research assistant! Here's what I can help you with:
+
+**🔍 Market Intelligence:**
+• Brand sentiment analysis (e.g., "What are people saying about Nike?")
+• Consumer feedback research (e.g., "Tesla customer reviews")
+• Competitive analysis (e.g., "iPhone vs Samsung comparison")
+• Industry trend analysis (e.g., "EV market trends")
+
+**💬 General Assistance:**
+• Answer questions about business, technology, and general topics
+• Provide insights and explanations
+• Help with research and analysis
+
+**📊 Professional Reports:**
+• Generate PDF reports for market analyses
+• Download comprehensive research summaries
+
+Just ask me about any brand, product, market trend, or general question. I'll automatically use web search when I need current market data!
+
+What would you like to know about?`;
+    }
+    
+    // Greetings
+    if (/^(hi|hello|hey)/.test(msg)) {
+        return "Hello! I'm InsightEar GPT, your market research assistant. I can help you analyze brands, consumer sentiment, market trends, and answer general questions using real-time web data. What would you like to know about?";
+    }
+    
+    // Thank you responses
+    if (msg.includes('thank') || msg.includes('thanks')) {
+        return "You're welcome! Feel free to ask me about any brands, market trends, or other questions you might have.";
+    }
+    
+    // Default conversational response
+    return "I'm here to help! You can ask me about market research, brand analysis, consumer insights, or any general questions. What would you like to know?";
+}
         const pdfRequestTerms = ['yes', 'yes please', 'generate pdf', 'create pdf', 'pdf report', 'download pdf', 'make pdf'];
         const isPdfRequest = pdfRequestTerms.some(term => 
             message.toLowerCase().trim() === term || message.toLowerCase().includes('pdf')
@@ -371,8 +514,8 @@ Your comprehensive market intelligence report is ready! Click the download link 
             return;
         }
         
-        // For complex queries, force token-efficient processing
-        console.log('🎯 Market/brand query detected - using optimized Assistant');
+        // At this point, we know it's a market intelligence query that needs web search
+        console.log('🎯 Market intelligence query confirmed - using Assistant with web search functions');
         
         // Store session info for PDF generation 
         let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
@@ -380,14 +523,14 @@ Your comprehensive market intelligence report is ready! Click the download link 
         session.lastQuery = message; // Store original user query
         
         // Create minimal thread with only current message (no history to save tokens)
-        console.log('🧵 Creating minimal thread for token efficiency...');
+        console.log('🧵 Creating minimal thread for market research...');
         const thread = await openai.beta.threads.create();
         console.log('✅ Fresh thread created: ' + thread.id);
         
-        // Add only current message (no conversation history to save tokens)
+        // Add only current message with explicit web search instruction
         await openai.beta.threads.messages.create(thread.id, {
             role: 'user',
-            content: message + '\n\nIMPORTANT: Please use search_web_data function to get current information about this topic. Do not rely on training data.'
+            content: message + '\n\nIMPORTANT: This is a market intelligence query. Please use search_web_data function to get current information about this topic. Do not rely on training data.'
         });
         
         // Create run with strict token limits to prevent rate limit errors
@@ -927,7 +1070,7 @@ app.get('/', (req, res) => {
             <div class="input-group">
                 <textarea 
                     id="messageInput" 
-                    placeholder="Ask about brands, market trends, or anything else..."
+                    placeholder="Ask about brands (Nike, Tesla), market trends, or general questions..."
                     rows="1"
                 ></textarea>
                 <button class="file-upload-btn" onclick="document.getElementById('fileInput').click()">
@@ -1097,12 +1240,13 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('Host: 0.0.0.0');
     console.log('Assistant ID: ' + (process.env.ASSISTANT_ID || 'NOT SET'));
     console.log('OpenAI API Key: ' + (process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'));
-    console.log('Web Search: Minimal Reddit + Google News');
-    console.log('Token Management: Optimized for rate limits');
-    console.log('Thread Strategy: Fresh threads to prevent token accumulation');
+    console.log('Query Classification: Intelligent routing enabled');
+    console.log('Web Search: Only for market intelligence queries');
+    console.log('Conversational: Direct responses for general queries');
     console.log('Debug endpoint: /debug-assistant');
     console.log('Function test: /test-function/[query]');
     console.log('Health check: /health');
     console.log('=================================');
-    console.log('✅ Ready for token-efficient market research!');
+    console.log('✅ Ready for intelligent market research!');
+    console.log('💡 System will automatically decide when web search is needed');
 });
