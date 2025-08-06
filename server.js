@@ -3,7 +3,6 @@ const multer = require('multer');
 const { OpenAI } = require('openai');
 const cors = require('cors');
 const https = require('https');
-const { URL } = require('url');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -27,8 +26,7 @@ const upload = multer({
 // REAL WEB SEARCH FUNCTIONS
 async function searchRedditData(query) {
     try {
-        // Use Reddit's JSON API
-        const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&limit=20&sort=relevance`;
+        const searchUrl = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(query) + '&limit=20&sort=relevance';
         
         return new Promise((resolve) => {
             https.get(searchUrl, { 
@@ -44,7 +42,7 @@ async function searchRedditData(query) {
                             title: post.data.title,
                             text: post.data.selftext,
                             score: post.data.score,
-                            url: `https://reddit.com${post.data.permalink}`,
+                            url: 'https://reddit.com' + post.data.permalink,
                             subreddit: post.data.subreddit,
                             created: new Date(post.data.created_utc * 1000).toLocaleDateString()
                         }));
@@ -62,8 +60,7 @@ async function searchRedditData(query) {
 
 async function searchNewsData(query) {
     try {
-        // Using Google News RSS feed
-        const newsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+        const newsUrl = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=en-US&gl=US&ceid=US:en';
         
         return new Promise((resolve) => {
             https.get(newsUrl, (res) => {
@@ -71,7 +68,6 @@ async function searchNewsData(query) {
                 res.on('data', (chunk) => data += chunk);
                 res.on('end', () => {
                     try {
-                        // Parse RSS XML to extract articles
                         const articles = [];
                         const titleMatches = data.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/g) || [];
                         const linkMatches = data.match(/<link>(.*?)<\/link>/g) || [];
@@ -102,8 +98,7 @@ async function searchNewsData(query) {
 }
 
 async function searchSocialMedia(query) {
-    // For demo purposes - in production, you'd use Twitter API, Facebook API, etc.
-    // This simulates social media mentions
+    // Simulated social media data - replace with real APIs in production
     const platforms = ['Twitter', 'Facebook', 'Instagram', 'TikTok'];
     const sentiments = ['positive', 'neutral', 'negative'];
     
@@ -112,14 +107,14 @@ async function searchSocialMedia(query) {
         mentions: Math.floor(Math.random() * 500) + 50,
         sentiment: sentiments[Math.floor(Math.random() * sentiments.length)],
         engagement: Math.floor(Math.random() * 1000) + 100,
-        trending_topics: [`#${query.replace(/\s+/g, '')}`, `${query} review`, `${query} experience`]
+        trending_topics: ['#' + query.replace(/\s+/g, ''), query + ' review', query + ' experience']
     }));
 }
 
 // ENHANCED FUNCTION HANDLERS
 async function handleWebSearch(query, sources = ['all'], dateRange = 'month') {
-    console.log(`🌐 Starting real web search for: "${query}"`);
-    console.log(`📊 Sources: ${sources.join(', ')}, Date range: ${dateRange}`);
+    console.log('🌐 Starting real web search for: "' + query + '"');
+    console.log('📊 Sources: ' + sources.join(', ') + ', Date range: ' + dateRange);
     
     const results = {
         query: query,
@@ -156,7 +151,7 @@ async function handleWebSearch(query, sources = ['all'], dateRange = 'month') {
             results.total_mentions += newsData.length;
         }
         
-        // Search Social Media (simulated)
+        // Search Social Media
         if (sources.includes('social_media') || sources.includes('all')) {
             console.log('📱 Gathering Social Media data...');
             const socialData = await searchSocialMedia(query);
@@ -168,22 +163,21 @@ async function handleWebSearch(query, sources = ['all'], dateRange = 'month') {
             results.total_mentions += results.sources.social_media.count;
         }
         
-        // Calculate overall sentiment (simplified)
+        // Calculate sentiment
         results.sentiment_summary = {
-            positive: Math.floor(Math.random() * 40) + 30, // 30-70%
-            neutral: Math.floor(Math.random() * 30) + 20,  // 20-50%
-            negative: Math.floor(Math.random() * 20) + 5    // 5-25%
+            positive: Math.floor(Math.random() * 40) + 30,
+            neutral: Math.floor(Math.random() * 30) + 20,
+            negative: Math.floor(Math.random() * 20) + 5
         };
         
-        console.log(`✅ Web search completed: ${results.total_mentions} total mentions found`);
+        console.log('✅ Web search completed: ' + results.total_mentions + ' total mentions found');
         
-        // Format for Assistant
         return JSON.stringify({
             search_results: results,
             real_data: true,
             current_date: new Date().toLocaleDateString(),
             sources_searched: sources,
-            summary: `Found ${results.total_mentions} mentions across ${Object.keys(results.sources).length} platforms`
+            summary: 'Found ' + results.total_mentions + ' mentions across ' + Object.keys(results.sources).length + ' platforms'
         });
         
     } catch (error) {
@@ -197,20 +191,18 @@ async function handleWebSearch(query, sources = ['all'], dateRange = 'month') {
 }
 
 async function handleMarketAnalysis(query, analysisType = 'sentiment') {
-    console.log(`📊 Performing market analysis: ${analysisType} for "${query}"`);
+    console.log('📊 Performing market analysis: ' + analysisType + ' for "' + query + '"');
     
-    // This would integrate with your business intelligence tools
-    // For now, providing structured analysis framework
     const analysis = {
         query: query,
         analysis_type: analysisType,
         timestamp: new Date().toISOString(),
         methodology: 'Real-time web data analysis with sentiment classification',
         market_insights: {
-            brand_recognition: Math.floor(Math.random() * 30) + 70, // 70-100%
+            brand_recognition: Math.floor(Math.random() * 30) + 70,
             market_share_trend: ['growing', 'stable', 'declining'][Math.floor(Math.random() * 3)],
             competitive_position: ['strong', 'moderate', 'weak'][Math.floor(Math.random() * 3)],
-            consumer_trust: Math.floor(Math.random() * 40) + 60 // 60-100%
+            consumer_trust: Math.floor(Math.random() * 40) + 60
         },
         recommendations: [
             'Monitor sentiment trends weekly for early issue detection',
@@ -227,10 +219,10 @@ async function handleMarketAnalysis(query, analysisType = 'sentiment') {
 app.post('/chat', async (req, res) => {
     try {
         const { message, files } = req.body;
-        console.log(`\n📝 User message: "${message}"`);
+        console.log('\n📝 User message: "' + message + '"');
         
         // Create thread and run with Assistant
-        console.log(`🤖 Creating thread with Assistant: ${process.env.ASSISTANT_ID}`);
+        console.log('🤖 Creating thread with Assistant: ' + process.env.ASSISTANT_ID);
         const thread = await openai.beta.threads.create();
         
         // Add user message
@@ -242,21 +234,20 @@ app.post('/chat', async (req, res) => {
         // Create run
         const run = await openai.beta.threads.runs.create(thread.id, {
             assistant_id: process.env.ASSISTANT_ID,
-            timeout: 180 // 3 minutes
+            timeout: 180
         });
         
-        console.log(`🚀 Run created: ${run.id}, Status: ${run.status}`);
+        console.log('🚀 Run created: ' + run.id + ', Status: ' + run.status);
         
-        // Poll for completion with function handling
+        // Poll for completion
         let attempts = 0;
-        const maxAttempts = 120; // 2 minutes at 1-second intervals
+        const maxAttempts = 120;
         
         while (attempts < maxAttempts) {
             const currentRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-            console.log(`🔄 Status: ${currentRun.status}, Attempt: ${attempts + 1}/${maxAttempts}`);
+            console.log('🔄 Status: ' + currentRun.status + ', Attempt: ' + (attempts + 1) + '/' + maxAttempts);
             
             if (currentRun.status === 'completed') {
-                // Get assistant response
                 const messages = await openai.beta.threads.messages.list(thread.id);
                 const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
                 
@@ -269,25 +260,25 @@ app.post('/chat', async (req, res) => {
                     .replace(/\n- /g, '\n\n- ')
                     .replace(/\n\n\n+/g, '\n\n');
                 
-                console.log(`✅ Assistant response received, length: ${responseText.length}`);
+                console.log('✅ Assistant response received, length: ' + responseText.length);
                 res.json({ response: responseText });
                 return;
             }
             
             if (currentRun.status === 'requires_action') {
-                console.log(`🔧 Function calls required!`);
+                console.log('🔧 Function calls required!');
                 const toolCalls = currentRun.required_action?.submit_tool_outputs?.tool_calls;
                 
                 if (toolCalls) {
-                    console.log(`📞 Processing ${toolCalls.length} function calls`);
+                    console.log('📞 Processing ' + toolCalls.length + ' function calls');
                     const toolOutputs = [];
                     
                     for (const toolCall of toolCalls) {
-                        console.log(`🔧 Processing function: ${toolCall.function.name}`);
+                        console.log('🔧 Processing function: ' + toolCall.function.name);
                         
                         try {
                             const args = JSON.parse(toolCall.function.arguments);
-                            console.log(`✅ Parsed arguments:`, args);
+                            console.log('✅ Parsed arguments:', args);
                             
                             let output;
                             if (toolCall.function.name === 'search_web_data') {
@@ -310,10 +301,10 @@ app.post('/chat', async (req, res) => {
                                 output: output
                             });
                             
-                            console.log(`✅ Function ${toolCall.function.name} completed`);
+                            console.log('✅ Function ' + toolCall.function.name + ' completed');
                             
                         } catch (error) {
-                            console.error(`❌ Function error:`, error);
+                            console.error('❌ Function error:', error);
                             toolOutputs.push({
                                 tool_call_id: toolCall.id,
                                 output: JSON.stringify({ error: 'Function execution failed', message: error.message })
@@ -322,39 +313,36 @@ app.post('/chat', async (req, res) => {
                     }
                     
                     // Submit tool outputs
-                    console.log(`🚀 Submitting ${toolOutputs.length} function outputs to Assistant...`);
+                    console.log('🚀 Submitting ' + toolOutputs.length + ' function outputs to Assistant...');
                     await openai.beta.threads.runs.submitToolOutputs(thread.id, run.id, {
                         tool_outputs: toolOutputs
                     });
-                    console.log(`✅ Function outputs submitted successfully`);
+                    console.log('✅ Function outputs submitted successfully');
                 }
             }
             
             if (currentRun.status === 'failed' || currentRun.status === 'cancelled' || currentRun.status === 'expired') {
-                console.error(`❌ Run failed with status: ${currentRun.status}`);
-                throw new Error(`Assistant run ${currentRun.status}`);
+                console.error('❌ Run failed with status: ' + currentRun.status);
+                throw new Error('Assistant run ' + currentRun.status);
             }
             
             attempts++;
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
-        // Timeout fallback
-        throw new Error(`Assistant timeout after ${maxAttempts} seconds`);
+        throw new Error('Assistant timeout after ' + maxAttempts + ' seconds');
         
     } catch (error) {
         console.error('❌ Chat error:', error);
         
-        // Fallback response
-        const fallbackResponse = `I'm experiencing technical difficulties with my research functions. Please try again in a moment.\n\n*Debug info: ${error.message}*\n\nFor immediate assistance, you can try rephrasing your question or asking about a different topic.`;
-        
+        const fallbackResponse = "I'm experiencing technical difficulties. Please try again in a moment.\n\n*Debug info: " + error.message + "*";
         res.json({ response: fallbackResponse });
     }
 });
 
 // FILE UPLOAD ENDPOINT
 app.post('/upload', upload.array('files'), (req, res) => {
-    console.log(`📎 Files uploaded: ${req.files?.length || 0}`);
+    console.log('📎 Files uploaded: ' + (req.files?.length || 0));
     res.json({ 
         message: 'Files uploaded successfully', 
         files: req.files?.map(file => ({
@@ -397,8 +385,7 @@ app.get('/health', (req, res) => {
 
 // MAIN PAGE
 app.get('/', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
+    res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -618,14 +605,8 @@ app.get('/', (req, res) => {
         <div class="chat-messages" id="chatMessages">
             <div class="message assistant-message">
                 <strong>Welcome to InsightEar GPT!</strong><br><br>
-                I'm your intelligent market research assistant powered by real-time web data and advanced analysis capabilities. I can help you with:
-                <br><br>
-                • Market intelligence and brand sentiment analysis<br>
-                • Real-time web research from Reddit, news, and social media<br>
-                • Competitive analysis and industry trends<br>
-                • Customer feedback analysis<br>
-                • Professional research reports<br><br>
-                Just ask me anything - I'll automatically search the web when needed and provide comprehensive insights!
+                I'm your intelligent market research assistant. I can help you with market intelligence, brand analysis, and general questions using real-time web data.<br><br>
+                Just ask me anything - I'll automatically search the web when needed!
             </div>
         </div>
         
@@ -633,7 +614,7 @@ app.get('/', (req, res) => {
             <div class="input-group">
                 <textarea 
                     id="messageInput" 
-                    placeholder="Ask me anything about market research, brand analysis, or general questions..."
+                    placeholder="Ask about brands, market trends, or anything else..."
                     rows="1"
                 ></textarea>
                 <button class="file-upload-btn" onclick="document.getElementById('fileInput').click()">
@@ -651,26 +632,20 @@ app.get('/', (req, res) => {
         const chatMessages = document.getElementById('chatMessages');
         const fileInput = document.getElementById('fileInput');
 
-        // Auto-resize textarea
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
 
-        // Send message function
         async function sendMessage() {
             const message = messageInput.value.trim();
             if (!message) return;
 
-            // Add user message
             addMessage(message, 'user');
             messageInput.value = '';
             messageInput.style.height = 'auto';
             
-            // Show typing indicator
             const typingDiv = addTypingIndicator();
-            
-            // Disable input
             sendBtn.disabled = true;
             messageInput.disabled = true;
 
@@ -682,11 +657,7 @@ app.get('/', (req, res) => {
                 });
 
                 const data = await response.json();
-                
-                // Remove typing indicator
                 chatMessages.removeChild(typingDiv);
-                
-                // Add assistant response
                 addMessage(data.response, 'assistant');
                 
             } catch (error) {
@@ -695,7 +666,6 @@ app.get('/', (req, res) => {
                 console.error('Chat error:', error);
             }
 
-            // Re-enable input
             sendBtn.disabled = false;
             messageInput.disabled = false;
             messageInput.focus();
@@ -703,18 +673,17 @@ app.get('/', (req, res) => {
 
         function addMessage(content, sender) {
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}-message`;
+            messageDiv.className = 'message ' + sender + '-message';
             
             if (sender === 'assistant') {
-                // Convert markdown-style formatting to HTML
                 content = content
-                    .replace(/## (.*?)(\n|$)/g, '<h2>$1</h2>')
-                    .replace(/### (.*?)(\n|$)/g, '<h3>$1</h3>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\* (.*?)(\n|$)/g, '<li>$1</li>')
-                    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-                    .replace(/\n\n/g, '<br><br>')
-                    .replace(/\n/g, '<br>');
+                    .replace(/## (.*?)(\\n|$)/g, '<h2>$1</h2>')
+                    .replace(/### (.*?)(\\n|$)/g, '<h3>$1</h3>')
+                    .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
+                    .replace(/\\* (.*?)(\\n|$)/g, '<li>$1</li>')
+                    .replace(/(<li>.*<\\/li>)/gs, '<ul>$1</ul>')
+                    .replace(/\\n\\n/g, '<br><br>')
+                    .replace(/\\n/g, '<br>');
                 
                 messageDiv.innerHTML = content;
             } else {
@@ -735,18 +704,16 @@ app.get('/', (req, res) => {
             return typingDiv;
         }
 
-        // Event listeners
         sendBtn.addEventListener('click', sendMessage);
         
-        messageInput.addEventListener('keypress', (e) => {
+        messageInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
 
-        // File upload handling
-        fileInput.addEventListener('change', async (e) => {
+        fileInput.addEventListener('change', async function(e) {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
 
@@ -760,7 +727,7 @@ app.get('/', (req, res) => {
                 });
                 
                 const result = await response.json();
-                addMessage(`Files uploaded: ${files.map(f => f.name).join(', ')}`, 'user');
+                addMessage('Files uploaded: ' + files.map(f => f.name).join(', '), 'user');
                 addMessage('Files received successfully! You can now ask questions about the uploaded content.', 'assistant');
                 
             } catch (error) {
@@ -768,12 +735,10 @@ app.get('/', (req, res) => {
             }
         });
 
-        // Focus input on load
         messageInput.focus();
     </script>
 </body>
-</html>
-    `);
+</html>`);
 });
 
 // Graceful shutdown
@@ -784,15 +749,15 @@ process.on('SIGTERM', () => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 InsightEar GPT Server Started`);
-    console.log(`=================================`);
-    console.log(`Port: ${PORT}`);
-    console.log(`Host: 0.0.0.0`);
-    console.log(`Assistant ID: ${process.env.ASSISTANT_ID || 'NOT SET'}`);
-    console.log(`OpenAI API Key: ${process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'}`);
-    console.log(`Web Search: Real-time Reddit + Google News`);
-    console.log(`Debug endpoint: /debug-assistant`);
-    console.log(`Health check: /health`);
-    console.log(`=================================`);
-    console.log(`✅ Ready for intelligent market research!`);
+    console.log('\n🚀 InsightEar GPT Server Started');
+    console.log('=================================');
+    console.log('Port: ' + PORT);
+    console.log('Host: 0.0.0.0');
+    console.log('Assistant ID: ' + (process.env.ASSISTANT_ID || 'NOT SET'));
+    console.log('OpenAI API Key: ' + (process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'));
+    console.log('Web Search: Real-time Reddit + Google News');
+    console.log('Debug endpoint: /debug-assistant');
+    console.log('Health check: /health');
+    console.log('=================================');
+    console.log('✅ Ready for intelligent market research!');
 });
