@@ -230,22 +230,23 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="welcome-message">
-            <strong>✅ Assistant properly configured</strong> - Both search_web_data and analyze_market_data functions active<br>
-            <strong>✅ Real-time web research</strong> - Live data from Reddit, Twitter, News, Reviews, and more<br>
-            <strong>✅ Market intelligence framework</strong> - Structured analysis with executive summaries and insights<br>
-            <strong>✅ PDF report generation</strong> - Professional downloadable reports available on request<br>
-            <strong>✅ Smart query routing</strong> - Simple questions get fast responses, market queries get full analysis<br><br>
+            <strong>✅ Smart AI Assistant</strong> - All queries go directly to your intelligent assistant<br>
+            <strong>✅ Real-time web research</strong> - Assistant automatically decides when to search current data<br>
+            <strong>✅ Market intelligence</strong> - Comprehensive analysis with sentiment, trends, and insights<br>
+            <strong>✅ Professional formatting</strong> - Responses structured for easy reading with headings and bullet points<br>
+            <strong>✅ PDF report generation</strong> - Download detailed reports when offered<br><br>
             
-            <strong>Try these examples:</strong><br>
-            • <strong>Simple:</strong> "What are labubus?" (fast response)<br>
-            • <strong>Market Intelligence:</strong> "What are people saying about Amazon online?" (full research)<br>
-            • <strong>Brand Analysis:</strong> "Nike brand sentiment analysis" (comprehensive analysis)<br><br>
+            <strong>Just ask naturally:</strong><br>
+            • "What are labubus?" (general questions)<br>
+            • "What are people saying about Amazon online?" (market research)<br>
+            • "Nike brand sentiment analysis" (business intelligence)<br>
+            • "Current trends in electric vehicles" (industry analysis)<br><br>
             
-            <em>Note: Market intelligence queries may take 1-2 minutes for comprehensive web research and analysis.</em>
+            <em>Your assistant will automatically use web search and analysis functions when needed.</em>
         </div>
         
         <div class="chat-messages" id="chatMessages">
-            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is searching the web for real-time data...</div>
+            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is thinking and researching...</div>
         </div>
         
         <div class="chat-input-container">
@@ -254,7 +255,7 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Ask anything - I'll search the web for current data: 'What are people saying about Amazon?'">
+                <input type="text" id="messageInput" placeholder="Ask me anything - I'll automatically research when needed...">
                 <button id="sendButton">➤</button>
             </div>
         </div>
@@ -369,117 +370,78 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Handle chat messages - Better error handling and routing
+// Handle chat messages - Route everything to Assistant
 app.post('/chat', async (req, res) => {
   try {
     const { message } = req.body;
-    console.log('Received message:', message);
+    console.log('📨 Received message:', message);
+    console.log('🤖 Routing to Assistant:', ASSISTANT_ID);
     
-    // Quick check for very simple queries that don't need functions
-    const isSimpleQuery = message.trim().length < 20 && !/(analyze|sentiment|market|brand|trend|review|feedback|company|business)/i.test(message);
-    
-    if (isSimpleQuery) {
-      console.log('Simple query detected, using direct completion');
-      
-      try {
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system", 
-              content: "You are InsightEar GPT, a helpful market intelligence assistant. For simple questions that don't require market research, provide direct, helpful answers. Be friendly and informative."
-            },
-            {
-              role: "user", 
-              content: message
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.7
-        });
-        
-        if (completion.choices[0]?.message?.content) {
-          let response = completion.choices[0].message.content;
-          response += '\n\n💡 *For market intelligence queries like "Nike brand sentiment" or "Amazon customer feedback", I can provide detailed research with real-time data.*';
-          return res.json({ response: response });
-        }
-      } catch (error) {
-        console.error('Simple query completion failed:', error);
-      }
-    }
-    
-    // For complex queries, try Assistant with functions
     try {
-      console.log('🎯 Complex query detected - using Assistant with functions');
-      console.log('📝 Query:', message);
-      console.log('🤖 Assistant ID:', ASSISTANT_ID);
-      
+      // Create thread
       const thread = await openai.beta.threads.create();
       console.log('✅ Thread created:', thread.id);
       
+      // Add user message
       await openai.beta.threads.messages.create(thread.id, {
         role: "user",
         content: message
       });
       console.log('✅ Message added to thread');
 
+      // Create run
       const run = await openai.beta.threads.runs.create(thread.id, {
         assistant_id: ASSISTANT_ID
       });
       console.log('✅ Run created:', run.id, 'Initial status:', run.status);
 
-      // Monitor run with detailed status logging
+      // Monitor run with function handling
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       let attempts = 0;
-      const maxAttempts = 60; // Reduced to 1 minute for initial debugging
+      const maxAttempts = 90; // 4.5 minutes max for comprehensive research
       
-      while ((runStatus.status === 'in_progress' || runStatus.status === 'requires_action') && attempts < maxAttempts) {
+      while ((runStatus.status === 'in_progress' || runStatus.status === 'requires_action' || runStatus.status === 'queued') && attempts < maxAttempts) {
         
         console.log(`🔄 Status: ${runStatus.status}, Attempt: ${attempts + 1}/${maxAttempts}`);
         
-        // Handle function calls
+        // Handle function calls if required
         if (runStatus.status === 'requires_action' && runStatus.required_action?.type === 'submit_tool_outputs') {
-          console.log('🔧 FUNCTION CALLS REQUIRED!');
-          console.log('📋 Required action details:', JSON.stringify(runStatus.required_action, null, 2));
+          console.log('🔧 Assistant requested function calls');
           
           const toolOutputs = [];
           const toolCalls = runStatus.required_action.submit_tool_outputs.tool_calls;
-          
-          console.log(`📞 Processing ${toolCalls.length} function calls:`);
+          console.log('📞 Processing', toolCalls.length, 'function calls');
           
           for (const toolCall of toolCalls) {
-            console.log('🔧 Processing function:', toolCall.function.name);
-            console.log('📝 Raw arguments:', toolCall.function.arguments);
+            console.log('🛠️ Function:', toolCall.function.name);
+            console.log('📝 Arguments:', toolCall.function.arguments);
             
             let output = '';
             
             try {
               const parsedArgs = JSON.parse(toolCall.function.arguments);
-              console.log('✅ Parsed arguments:', parsedArgs);
               
               if (toolCall.function.name === 'search_web_data') {
-                console.log('🌐 Calling handleWebSearch...');
+                console.log('🌐 Executing web search...');
                 output = await handleWebSearch(parsedArgs);
-                console.log('✅ Web search completed, output length:', output.length);
+                console.log('✅ Web search completed');
               } else if (toolCall.function.name === 'analyze_market_data') {
-                console.log('📊 Calling handleMarketAnalysis...');
+                console.log('📊 Executing market analysis...');
                 output = await handleMarketAnalysis(parsedArgs);
-                console.log('✅ Market analysis completed, output length:', output.length);
+                console.log('✅ Market analysis completed');
               } else {
-                console.log('❌ Unknown function called:', toolCall.function.name);
+                console.log('❌ Unknown function:', toolCall.function.name);
                 output = JSON.stringify({ 
                   error: 'Unknown function', 
                   function: toolCall.function.name,
-                  note: 'This function is not implemented on the server',
                   available_functions: ['search_web_data', 'analyze_market_data']
                 });
               }
             } catch (parseError) {
-              console.error('❌ Error parsing function arguments:', parseError);
+              console.error('❌ Error processing function:', parseError);
               output = JSON.stringify({
-                error: 'Failed to parse function arguments',
-                raw_arguments: toolCall.function.arguments,
-                parse_error: parseError.message
+                error: 'Function processing failed',
+                message: parseError.message
               });
             }
             
@@ -487,93 +449,82 @@ app.post('/chat', async (req, res) => {
               tool_call_id: toolCall.id,
               output: output
             });
-            
-            console.log('📤 Function output prepared for tool_call_id:', toolCall.id);
           }
           
-          try {
-            console.log('🚀 Submitting', toolOutputs.length, 'function outputs to Assistant...');
-            await openai.beta.threads.runs.submitToolOutputs(thread.id, run.id, {
-              tool_outputs: toolOutputs
-            });
-            console.log('✅ Function outputs submitted successfully');
-          } catch (submitError) {
-            console.error('❌ Error submitting function outputs:', submitError);
-            throw submitError;
-          }
+          console.log('📤 Submitting function outputs...');
+          await openai.beta.threads.runs.submitToolOutputs(thread.id, run.id, {
+            tool_outputs: toolOutputs
+          });
+          console.log('✅ Function outputs submitted');
         }
         
         await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second intervals
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         attempts++;
         
-        if (attempts % 5 === 0) {
-          console.log(`⏰ Assistant processing... ${attempts * 3}/${maxAttempts * 3} seconds, status: ${runStatus.status}`);
+        if (attempts % 10 === 0) {
+          console.log(`⏰ Processing time: ${attempts * 3} seconds, status: ${runStatus.status}`);
         }
       }
 
-      console.log('🏁 Final run status:', runStatus.status);
-      console.log('📊 Total processing time:', attempts * 3, 'seconds');
+      console.log('🏁 Final status:', runStatus.status, 'after', attempts * 3, 'seconds');
 
       if (runStatus.status === 'completed') {
-        console.log('✅ Run completed successfully! Getting messages...');
+        console.log('✅ Assistant completed successfully');
         const messages = await openai.beta.threads.messages.list(thread.id);
         const assistantMessage = messages.data[0];
         
         if (assistantMessage && assistantMessage.content[0]) {
-          console.log('✅ Assistant response received, length:', assistantMessage.content[0].text.value.length);
           let response = assistantMessage.content[0].text.value;
+          console.log('✅ Response received, length:', response.length);
           
+          // Ensure PDF offer is included if not already there
           if (!response.toLowerCase().includes('pdf report')) {
             response += '\n\n---\n\n**Would you like me to generate a detailed PDF report of this analysis?**';
           }
           
           return res.json({ response: response });
         } else {
-          console.log('❌ No message content found');
+          console.log('❌ No response content found');
           throw new Error('No response content from Assistant');
         }
       } else if (runStatus.status === 'failed') {
         console.log('❌ Assistant run failed:', runStatus.last_error);
-        console.log('🔍 Full error details:', JSON.stringify(runStatus.last_error, null, 2));
         throw new Error(`Assistant failed: ${runStatus.last_error?.message || 'Unknown error'}`);
-      } else if (runStatus.status === 'requires_action') {
-        console.log('❌ Assistant stuck in requires_action state');
-        console.log('🔍 Required action:', JSON.stringify(runStatus.required_action, null, 2));
-        throw new Error(`Assistant stuck in requires_action state after ${attempts} attempts`);
       } else {
-        console.log(`❌ Assistant timeout after ${attempts * 3}s, final status: ${runStatus.status}`);
+        console.log('❌ Assistant timeout, final status:', runStatus.status);
         throw new Error(`Assistant timeout after ${attempts * 3} seconds, status: ${runStatus.status}`);
       }
     } catch (assistantError) {
-      console.error('❌ ASSISTANT ERROR:', assistantError.message);
-      console.error('❌ Full error stack:', assistantError.stack);
+      console.error('❌ Assistant error:', assistantError.message);
       
-      // Fallback for market intelligence queries
-      console.log('⚠️ Using fallback completion due to Assistant error');
+      // Simple fallback without function calls
       try {
+        console.log('⚠️ Using direct completion fallback');
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
             {
               role: "system", 
-              content: `You are InsightEar GPT. The main assistant is having issues, so provide the best market intelligence analysis you can based on your knowledge. 
-
-IMPORTANT: Mention that you're experiencing technical difficulties with live data access, but provide useful insights anyway.
-
-Always end with: "Would you like me to generate a detailed PDF report of this analysis?"`
+              content: `You are InsightEar GPT, an advanced market intelligence assistant. 
+              
+              Format your responses with clear headings, bullet points, and proper structure for easy reading.
+              Use markdown formatting when appropriate (bold, headings, lists).
+              Always end with: "Would you like me to generate a detailed PDF report of this analysis?"
+              
+              Note: You're currently in fallback mode due to technical difficulties with advanced research functions.`
             },
             {
               role: "user", 
               content: message
             }
           ],
-          max_tokens: 1000,
+          max_tokens: 1500,
           temperature: 0.7
         });
         
         if (completion.choices[0]?.message?.content) {
-          let response = `⚠️ **Technical Note**: I'm experiencing difficulties accessing my live research functions, so this analysis is based on my existing knowledge rather than real-time data.\n\n${completion.choices[0].message.content}`;
+          let response = `⚠️ **Technical Note**: Experiencing difficulties with advanced research functions, providing analysis based on available knowledge.\n\n${completion.choices[0].message.content}`;
           return res.json({ response: response });
         }
       } catch (fallbackError) {
@@ -583,15 +534,11 @@ Always end with: "Would you like me to generate a detailed PDF report of this an
     
     // Final emergency response
     res.json({ 
-      response: `I'm experiencing technical difficulties. Here's what might help:
+      response: `I'm experiencing technical difficulties. Please try your query again.
 
-1. **Check Assistant Configuration**: Visit /debug-assistant to see if your Assistant is properly configured
-2. **Simple queries** like "${message}" should work - this suggests an Assistant setup issue
-3. **Environment variables**: Make sure ASSISTANT_ID and OPENAI_API_KEY are set correctly in Railway
+**Debug Info**: ${ASSISTANT_ID ? 'Assistant configured' : 'Assistant missing'}
 
-**Debug Info**: ${ASSISTANT_ID ? 'Assistant ID configured' : 'Assistant ID missing'}
-
-**Would you like me to try a different approach to answer your question?**` 
+**Would you like me to generate a PDF report?** I can create a document based on available information.` 
     });
     
   } catch (error) {
@@ -891,7 +838,123 @@ app.post('/generate-pdf', (req, res) => {
   }
 });
 
-// Debug endpoint to test Assistant
+// Test endpoint specifically for function calls
+app.get('/test-functions', async (req, res) => {
+  try {
+    console.log('🧪 Testing Assistant with function calls...');
+    
+    const testQuery = "Nike brand sentiment analysis";
+    console.log('📝 Test query:', testQuery);
+    
+    // Create thread and message
+    const thread = await openai.beta.threads.create();
+    console.log('✅ Thread created:', thread.id);
+    
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: testQuery
+    });
+    console.log('✅ Message added');
+    
+    // Create run
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: ASSISTANT_ID
+    });
+    console.log('✅ Run created:', run.id, 'Status:', run.status);
+    
+    // Monitor with function call handling
+    let runStatus = run;
+    let attempts = 0;
+    let functionCallsHandled = 0;
+    const maxAttempts = 30; // 90 seconds max
+    
+    while ((runStatus.status === 'in_progress' || runStatus.status === 'requires_action' || runStatus.status === 'queued') && attempts < maxAttempts) {
+      
+      console.log(`⏱️ Attempt ${attempts + 1}: Status = ${runStatus.status}`);
+      
+      if (runStatus.status === 'requires_action') {
+        console.log('🔧 Function calls required!');
+        const toolCalls = runStatus.required_action?.submit_tool_outputs?.tool_calls || [];
+        console.log('📞 Function calls:', toolCalls.length);
+        
+        const toolOutputs = [];
+        
+        for (const toolCall of toolCalls) {
+          console.log('🛠️ Function:', toolCall.function.name);
+          
+          let output = '';
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            
+            if (toolCall.function.name === 'search_web_data') {
+              output = await handleWebSearch(args);
+              functionCallsHandled++;
+            } else if (toolCall.function.name === 'analyze_market_data') {
+              output = await handleMarketAnalysis(args);
+              functionCallsHandled++;
+            } else {
+              output = JSON.stringify({ error: 'Unknown function', function: toolCall.function.name });
+            }
+          } catch (err) {
+            output = JSON.stringify({ error: 'Function error', message: err.message });
+          }
+          
+          toolOutputs.push({
+            tool_call_id: toolCall.id,
+            output: output
+          });
+        }
+        
+        console.log('📤 Submitting', toolOutputs.length, 'function outputs...');
+        await openai.beta.threads.runs.submitToolOutputs(thread.id, run.id, {
+          tool_outputs: toolOutputs
+        });
+        console.log('✅ Function outputs submitted');
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      attempts++;
+    }
+    
+    console.log('🏁 Final status:', runStatus.status);
+    
+    let result = {
+      test_query: testQuery,
+      thread_id: thread.id,
+      run_id: run.id,
+      final_status: runStatus.status,
+      attempts: attempts,
+      function_calls_handled: functionCallsHandled,
+      processing_time: attempts * 3 + ' seconds'
+    };
+    
+    if (runStatus.status === 'completed') {
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      const response = messages.data[0]?.content[0]?.text?.value || 'No response';
+      result.assistant_response = response.substring(0, 500) + '...'; // Truncate for readability
+      result.test_result = 'SUCCESS';
+      result.response_length = response.length;
+    } else if (runStatus.status === 'failed') {
+      result.error = runStatus.last_error;
+      result.test_result = 'FAILED';
+    } else {
+      result.test_result = 'TIMEOUT';
+      result.issue = 'Run stuck in ' + runStatus.status + ' status';
+    }
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('🚨 Function test error:', error);
+    res.json({
+      test_result: 'ERROR',
+      error: error.message
+    });
+  }
+});
+
+// Test endpoint to test Assistant
 app.get('/test-assistant', async (req, res) => {
   try {
     console.log('🧪 Testing basic Assistant functionality...');
@@ -1052,13 +1115,14 @@ app.listen(port, '0.0.0.0', () => {
   console.log('Port:', port);
   console.log('Host: 0.0.0.0');
   console.log('Assistant ID:', ASSISTANT_ID);
-  console.log('Web Search: FORCED for every query');
+  console.log('Routing: ALL queries → Assistant');
+  console.log('Functions: search_web_data + analyze_market_data');
+  console.log('Decision Making: Assistant decides when to use functions');
   console.log('PDF Offers: Automatic after responses');
-  console.log('Timeout: 3 minutes for web research');
-  console.log('Debug endpoint: /debug-assistant');
-  console.log('PDF endpoint: /generate-pdf');
+  console.log('Max Processing Time: 4.5 minutes');
+  console.log('Debug endpoints: /debug-assistant, /test-assistant, /test-functions');
   console.log('=================================');
-  console.log('✅ Ready for real-time intelligence!');
+  console.log('✅ Ready for intelligent assistance!');
 });
 
 module.exports = app;
