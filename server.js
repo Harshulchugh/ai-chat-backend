@@ -230,23 +230,11 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="welcome-message">
-            <strong>✅ Smart AI Assistant</strong> - All queries go directly to your intelligent assistant<br>
-            <strong>✅ Real-time web research</strong> - Assistant automatically decides when to search current data<br>
-            <strong>✅ Market intelligence</strong> - Comprehensive analysis with sentiment, trends, and insights<br>
-            <strong>✅ Professional formatting</strong> - Responses structured for easy reading with headings and bullet points<br>
-            <strong>✅ PDF report generation</strong> - Download detailed reports when offered<br><br>
-            
-            <strong>Just ask naturally:</strong><br>
-            • "What are labubus?" (general questions)<br>
-            • "What are people saying about Amazon online?" (market research)<br>
-            • "Nike brand sentiment analysis" (business intelligence)<br>
-            • "Current trends in electric vehicles" (industry analysis)<br><br>
-            
-            <em>Your assistant will automatically use web search and analysis functions when needed.</em>
+            InsightEar GPT is your intelligent market research assistant powered by real-time web data and advanced analysis capabilities.
         </div>
         
         <div class="chat-messages" id="chatMessages">
-            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is thinking and researching...</div>
+            <div class="typing-indicator" id="typingIndicator">InsightEar GPT is thinking...</div>
         </div>
         
         <div class="chat-input-container">
@@ -255,7 +243,7 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Ask me anything - I'll automatically research when needed...">
+                <input type="text" id="messageInput" placeholder="Ask me anything...">
                 <button id="sendButton">➤</button>
             </div>
         </div>
