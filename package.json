@@ -14,8 +14,8 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "description": "InsightEar GPT - Real-time Market Intelligence Platform",
-  "keywords": ["market-intelligence", "real-time-data", "web-search", "openai", "business-analytics"],
+  "description": "InsightEar GPT - Real-time Market Intelligence with Conversation Persistence",
+  "keywords": ["market-intelligence", "real-time-data", "web-search", "openai", "business-analytics", "conversation-persistence"],
   "author": "InsightEar",
   "license": "MIT"
 }
