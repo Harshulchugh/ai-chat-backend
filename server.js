@@ -233,8 +233,7 @@ app.post('/chat', async (req, res) => {
         
         // Create run
         const run = await openai.beta.threads.runs.create(thread.id, {
-            assistant_id: process.env.ASSISTANT_ID,
-            timeout: 180
+            assistant_id: process.env.ASSISTANT_ID
         });
         
         console.log('🚀 Run created: ' + run.id + ', Status: ' + run.status);
