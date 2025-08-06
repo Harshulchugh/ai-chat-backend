@@ -456,82 +456,34 @@ app.get('/', (req, res) => {
             addMessage('user', message);
             addMessage('bot', '💭 Analyzing...');
             
-            // Comprehensive intelligence keywords covering real market research scenarios
-            var keywords = [
-                // Sentiment & Opinion Research
-                'sentiment', 'opinion', 'perception', 'view', 'feeling', 'impression', 'attitude', 'stance',
-                'positive', 'negative', 'neutral', 'mixed', 'polarized',
-                'love', 'hate', 'like', 'dislike', 'prefer', 'favor',
-                'satisfied', 'dissatisfied', 'happy', 'unhappy', 'frustrated', 'pleased',
-                
-                // Brand Research
-                'brand', 'branding', 'reputation', 'image', 'awareness', 'recognition',
-                'trust', 'credibility', 'reliability', 'authenticity',
-                'positioning', 'differentiation', 'competitive advantage',
-                'equity', 'value proposition', 'brand health',
-                
-                // Product Research
-                'product', 'quality', 'performance', 'features', 'benefits',
-                'usability', 'functionality', 'design', 'aesthetics',
-                'innovation', 'technology', 'specs', 'specifications',
-                'durability', 'effectiveness',
-                
-                // Consumer Behavior
-                'purchase', 'buy', 'buying', 'purchasing', 'consumer', 'customer',
-                'usage', 'experience', 'journey', 'touchpoint',
-                'loyalty', 'retention', 'churn', 'switching',
-                'recommendation', 'referral', 'word-of-mouth', 'advocacy',
-                
-                // Market Research
-                'market', 'competition', 'competitive', 'competitor', 'rivals',
-                'share', 'position', 'ranking', 'leader', 'challenger',
-                'trends', 'growth', 'decline', 'emerging', 'disruption',
-                'segment', 'target', 'demographic', 'psychographic',
-                
-                // Comparative Analysis
-                'vs', 'versus', 'compared', 'comparison', 'compare',
-                'better', 'worse', 'superior', 'inferior', 'advantage',
-                'alternative', 'substitute', 'replacement',
-                'benchmark', 'standard', 'industry average',
-                
-                // Research Language
-                'analysis', 'research', 'study', 'survey', 'poll', 'feedback',
-                'insights', 'intelligence', 'data', 'metrics', 'kpis',
-                'report', 'findings', 'results', 'conclusions',
-                'tracking', 'monitoring', 'measurement',
-                
-                // Social Listening
-                'buzz', 'chatter', 'conversation', 'discussion', 'talk',
-                'mention', 'mentions', 'share of voice',
-                'viral', 'trending', 'popular', 'hot topic',
-                'influence', 'influencer', 'evangelism',
-                
-                // Customer Experience
-                'satisfaction', 'dissatisfaction', 'delight',
-                'service', 'support', 'help', 'assistance',
-                'complaint', 'issue', 'problem', 'concern',
-                
-                // Performance Metrics
-                'success', 'failure', 'revenue', 'sales',
-                'adoption', 'penetration', 'reach',
-                'effectiveness', 'efficiency', 'optimization',
-                
-                // Natural Language Patterns
-                'what are people saying', 'how do people feel', 'what do customers think',
-                'people saying', 'customers saying', 'users saying', 'reviews saying',
-                'thoughts on', 'opinions about', 'feedback on', 'views on',
-                'how is', 'how does', 'is it good', 'is it bad',
-                'worth it', 'recommend', 'should i buy', 'any good',
-                
-                // Brand/Product Names (can be expanded)
-                'nike', 'adidas', 'apple', 'samsung', 'google', 'microsoft',
-                'tesla', 'bmw', 'mercedes', 'ford', 'toyota',
-                'starbucks', 'mcdonalds', 'coca cola', 'pepsi',
-                'amazon', 'walmart', 'target', 'costco',
-                'iphone', 'galaxy', 'macbook', 'windows',
-                'kirkland', 'new balance', 'band aid', 'johnson'
-            ];
-            var needsIntel = keywords.some(function(k) { return message.toLowerCase().includes(k); });
+            // Comprehensive intelligence keywords (simplified for syntax safety)
+            var sentimentWords = ['sentiment', 'opinion', 'perception', 'feeling', 'attitude', 'positive', 'negative', 'neutral', 'satisfied', 'happy', 'frustrated'];
+            var brandWords = ['brand', 'reputation', 'image', 'trust', 'credibility', 'positioning', 'awareness', 'recognition'];
+            var productWords = ['product', 'quality', 'performance', 'features', 'design', 'innovation', 'usability', 'durability'];
+            var consumerWords = ['customer', 'consumer', 'purchase', 'buying', 'experience', 'loyalty', 'satisfaction', 'feedback'];
+            var marketWords = ['market', 'competition', 'competitive', 'competitor', 'trends', 'analysis', 'research', 'insights'];
+            var compareWords = ['vs', 'versus', 'compared', 'comparison', 'compare', 'better', 'worse', 'alternative'];
+            var socialWords = ['saying', 'think', 'feel', 'mention', 'buzz', 'talk', 'discussion', 'reviews'];
+            var questionWords = ['what are people saying', 'what do customers think', 'how do people feel', 'thoughts on', 'opinions about'];
+            var brandNames = ['nike', 'apple', 'samsung', 'tesla', 'starbucks', 'mcdonalds', 'amazon', 'google', 'microsoft', 'kirkland', 'new balance'];
+            
+            var allKeywords = sentimentWords.concat(brandWords, productWords, consumerWords, marketWords, compareWords, socialWords, brandNames);
+            
+            var needsIntel = false;
+            for (var i = 0; i < allKeywords.length; i++) {
+                if (message.toLowerCase().includes(allKeywords[i])) {
+                    needsIntel = true;
+                    break;
+                }
+            }
+            
+            // Also check for question patterns
+            for (var j = 0; j < questionWords.length; j++) {
+                if (message.toLowerCase().includes(questionWords[j])) {
+                    needsIntel = true;
+                    break;
+                }
+            }
             
             if (needsIntel) {
                 console.log('Making intelligence request');
@@ -588,31 +540,21 @@ app.get('/', (req, res) => {
         function createIntelligenceHTML(data) {
             var html = '<div class="intelligence">';
             html += '<div class="intel-title">' + data.query + ' - ' + data.researchType.charAt(0).toUpperCase() + data.researchType.slice(1) + ' Intelligence</div>';
+            
+            // Sentiment cards
             html += '<div class="sentiment">';
-            html += '<div class="sentiment-card">';
-            html += '<div class="percentage positive">' + data.positive + '%</div>';
-            html += '<div class="label">Positive</div>';
-            html += '</div>';
-            html += '<div class="sentiment-card">';
-            html += '<div class="percentage neutral">' + data.neutral + '%</div>';
-            html += '<div class="label">Neutral</div>';
-            html += '</div>';
+            html += '<div class="sentiment-card"><div class="percentage positive">' + data.positive + '%</div><div class="label">Positive</div></div>';
+            html += '<div class="sentiment-card"><div class="percentage neutral">' + data.neutral + '%</div><div class="label">Neutral</div></div>';
             html += '</div>';
             html += '<div class="sentiment">';
-            html += '<div class="sentiment-card">';
-            html += '<div class="percentage negative">' + data.negative + '%</div>';
-            html += '<div class="label">Negative</div>';
-            html += '</div>';
-            html += '<div class="sentiment-card">';
-            html += '<div class="percentage">' + data.mentions + '</div>';
-            html += '<div class="label">Mentions</div>';
-            html += '</div>';
-            html += '</div>';
-            html += '<div class="bar">';
-            html += '<div class="bar-fill" style="width: ' + data.positive + '%"></div>';
+            html += '<div class="sentiment-card"><div class="percentage negative">' + data.negative + '%</div><div class="label">Negative</div></div>';
+            html += '<div class="sentiment-card"><div class="percentage">' + data.mentions + '</div><div class="label">Mentions</div></div>';
             html += '</div>';
             
-            // Add real clickable sources with themes
+            // Sentiment bar
+            html += '<div class="bar"><div class="bar-fill" style="width: ' + data.positive + '%"></div></div>';
+            
+            // Sources
             html += '<div class="sources">';
             for (var i = 0; i < data.sources.length; i++) {
                 var source = data.sources[i];
@@ -627,21 +569,22 @@ app.get('/', (req, res) => {
             }
             html += '</div>';
             
-            // Add research insights
+            // Research insights
             html += '<div style="margin: 15px 0;"><strong>🔍 Research Insights:</strong></div>';
             for (var j = 0; j < data.insights.length; j++) {
                 html += '<div style="font-size: 12px; margin: 6px 0; padding-left: 10px; border-left: 3px solid #10b981;">• ' + data.insights[j] + '</div>';
             }
             
-            // Add strategic recommendations
+            // Strategic recommendations
             html += '<div style="margin: 15px 0 10px 0;"><strong>💡 Strategic Recommendations:</strong></div>';
             for (var k = 0; k < data.recommendations.length; k++) {
                 html += '<div style="font-size: 12px; margin: 6px 0; padding-left: 10px; border-left: 3px solid #2a5298;">→ ' + data.recommendations[k] + '</div>';
             }
             
-            html += '<button class="download-btn" onclick="downloadReport(\\'';
-            html += data.reportId;
-            html += '\\')">📄 Download PDF Report</button>';
+            // Download button (simplified to avoid quote issues)
+            html += '<button class="download-btn" onclick="downloadReport(';
+            html += "'" + data.reportId + "'";
+            html += ')">📄 Download PDF Report</button>';
             html += '</div>';
             return html;
         }
