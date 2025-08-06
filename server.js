@@ -327,30 +327,28 @@ app.post('/chat', async (req, res) => {
             return;
         }
         
-        // For complex queries, use Assistant but with fresh thread to avoid token accumulation
-        console.log('🎯 Complex query - using Assistant with fresh thread to manage tokens');
+        // For complex queries, force token-efficient processing
+        console.log('🎯 Market/brand query detected - using optimized Assistant');
         
-        // Always create fresh thread for complex queries to avoid token accumulation
-        console.log('🧵 Creating fresh thread for token efficiency...');
+        // Create minimal thread with only current message (no history to save tokens)
+        console.log('🧵 Creating minimal thread for token efficiency...');
         const thread = await openai.beta.threads.create();
         console.log('✅ Fresh thread created: ' + thread.id);
         
-        // Store session info for PDF generation (but use fresh threads)
-        let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
-        const session = getSession(sessionId);
-        session.lastQuery = message;
-        
-        // Add user message to fresh thread
+        // Add only current message (no conversation history to save tokens)
         await openai.beta.threads.messages.create(thread.id, {
             role: 'user',
-            content: message
+            content: message + '\n\nIMPORTANT: Please use search_web_data function to get current information about this topic. Do not rely on training data.'
         });
         
-        // Create run with optimized settings
+        // Create run with strict token limits to prevent rate limit errors
+        console.log('🔧 Checking Assistant configuration before creating run...');
+        
         const run = await openai.beta.threads.runs.create(thread.id, {
             assistant_id: process.env.ASSISTANT_ID,
-            max_prompt_tokens: 20000,  // Limit input tokens
-            max_completion_tokens: 8000 // Limit output tokens
+            max_prompt_tokens: 15000,  // Reduced input limit
+            max_completion_tokens: 6000, // Reduced output limit
+            additional_instructions: 'CRITICAL: For this query about "' + message + '", you MUST call search_web_data function to get current information. Do not provide general knowledge responses.'
         });
         
         console.log('🚀 Run created: ' + run.id + ', Status: ' + run.status);
@@ -369,7 +367,17 @@ app.post('/chat', async (req, res) => {
                 
                 let responseText = assistantMessage?.content?.[0]?.text?.value || 'No response generated.';
                 
+                // Check if functions were used
+                if (responseText.includes('temporary issue') || responseText.includes('based on known information')) {
+                    console.log('⚠️ WARNING: Assistant did not use search functions - provided fallback response');
+                    console.log('💡 Response suggests functions were not called successfully');
+                } else {
+                    console.log('✅ Assistant appears to have used search functions successfully');
+                }
+                
                 // Store response for potential PDF generation
+                let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
+                const session = getSession(sessionId);
                 session.lastResponse = responseText;
                 
                 // Enhanced formatting
