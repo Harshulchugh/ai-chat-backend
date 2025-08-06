@@ -410,31 +410,42 @@ app.post('/chat', async (req, res) => {
     
     // For complex queries, try Assistant with functions
     try {
-      console.log('Complex query - using Assistant with functions');
+      console.log('🎯 Complex query detected - using Assistant with functions');
+      console.log('📝 Query:', message);
+      console.log('🤖 Assistant ID:', ASSISTANT_ID);
+      
       const thread = await openai.beta.threads.create();
+      console.log('✅ Thread created:', thread.id);
       
       await openai.beta.threads.messages.create(thread.id, {
         role: "user",
         content: message
       });
+      console.log('✅ Message added to thread');
 
       const run = await openai.beta.threads.runs.create(thread.id, {
         assistant_id: ASSISTANT_ID
       });
+      console.log('✅ Run created:', run.id, 'Initial status:', run.status);
 
-      // Monitor run with shorter initial timeout
+      // Monitor run with detailed status logging
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       let attempts = 0;
-      const maxAttempts = 120; // 2 minutes max
+      const maxAttempts = 60; // Reduced to 1 minute for initial debugging
       
       while ((runStatus.status === 'in_progress' || runStatus.status === 'requires_action') && attempts < maxAttempts) {
         
+        console.log(`🔄 Status: ${runStatus.status}, Attempt: ${attempts + 1}/${maxAttempts}`);
+        
         // Handle function calls
         if (runStatus.status === 'requires_action' && runStatus.required_action?.type === 'submit_tool_outputs') {
-          console.log('🔧 Assistant requested function calls');
+          console.log('🔧 FUNCTION CALLS REQUIRED!');
+          console.log('📋 Required action details:', JSON.stringify(runStatus.required_action, null, 2));
           
           const toolOutputs = [];
           const toolCalls = runStatus.required_action.submit_tool_outputs.tool_calls;
+          
+          console.log(`📞 Processing ${toolCalls.length} function calls:`);
           
           for (const toolCall of toolCalls) {
             console.log('🔧 Processing function:', toolCall.function.name);
@@ -480,28 +491,37 @@ app.post('/chat', async (req, res) => {
             console.log('📤 Function output prepared for tool_call_id:', toolCall.id);
           }
           
-          console.log('🚀 Submitting', toolOutputs.length, 'function outputs to Assistant...');
-          await openai.beta.threads.runs.submitToolOutputs(thread.id, run.id, {
-            tool_outputs: toolOutputs
-          });
-          console.log('✅ Function outputs submitted successfully');
+          try {
+            console.log('🚀 Submitting', toolOutputs.length, 'function outputs to Assistant...');
+            await openai.beta.threads.runs.submitToolOutputs(thread.id, run.id, {
+              tool_outputs: toolOutputs
+            });
+            console.log('✅ Function outputs submitted successfully');
+          } catch (submitError) {
+            console.error('❌ Error submitting function outputs:', submitError);
+            throw submitError;
+          }
         }
         
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second intervals
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         attempts++;
         
-        if (attempts % 10 === 0) {
-          console.log(`Assistant processing... ${attempts}/${maxAttempts} seconds, status: ${runStatus.status}`);
+        if (attempts % 5 === 0) {
+          console.log(`⏰ Assistant processing... ${attempts * 3}/${maxAttempts * 3} seconds, status: ${runStatus.status}`);
         }
       }
 
+      console.log('🏁 Final run status:', runStatus.status);
+      console.log('📊 Total processing time:', attempts * 3, 'seconds');
+
       if (runStatus.status === 'completed') {
+        console.log('✅ Run completed successfully! Getting messages...');
         const messages = await openai.beta.threads.messages.list(thread.id);
         const assistantMessage = messages.data[0];
         
         if (assistantMessage && assistantMessage.content[0]) {
-          console.log('✅ Assistant response received');
+          console.log('✅ Assistant response received, length:', assistantMessage.content[0].text.value.length);
           let response = assistantMessage.content[0].text.value;
           
           if (!response.toLowerCase().includes('pdf report')) {
@@ -509,19 +529,28 @@ app.post('/chat', async (req, res) => {
           }
           
           return res.json({ response: response });
+        } else {
+          console.log('❌ No message content found');
+          throw new Error('No response content from Assistant');
         }
       } else if (runStatus.status === 'failed') {
-        console.log('❌ Assistant failed:', runStatus.last_error);
-        console.log('Error details:', JSON.stringify(runStatus.last_error, null, 2));
+        console.log('❌ Assistant run failed:', runStatus.last_error);
+        console.log('🔍 Full error details:', JSON.stringify(runStatus.last_error, null, 2));
         throw new Error(`Assistant failed: ${runStatus.last_error?.message || 'Unknown error'}`);
+      } else if (runStatus.status === 'requires_action') {
+        console.log('❌ Assistant stuck in requires_action state');
+        console.log('🔍 Required action:', JSON.stringify(runStatus.required_action, null, 2));
+        throw new Error(`Assistant stuck in requires_action state after ${attempts} attempts`);
       } else {
-        console.log(`❌ Assistant timeout after ${attempts}s, status: ${runStatus.status}`);
-        throw new Error(`Assistant timeout after ${attempts} seconds`);
+        console.log(`❌ Assistant timeout after ${attempts * 3}s, final status: ${runStatus.status}`);
+        throw new Error(`Assistant timeout after ${attempts * 3} seconds, status: ${runStatus.status}`);
       }
     } catch (assistantError) {
-      console.error('❌ Assistant error:', assistantError.message);
+      console.error('❌ ASSISTANT ERROR:', assistantError.message);
+      console.error('❌ Full error stack:', assistantError.stack);
       
       // Fallback for market intelligence queries
+      console.log('⚠️ Using fallback completion due to Assistant error');
       try {
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
