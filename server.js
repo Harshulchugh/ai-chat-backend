@@ -23,6 +23,31 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
+// Token counting function (moved to proper location)
+function estimateTokens(text) {
+    // Rough estimate: ~4 characters per token for English
+    return Math.ceil(text.length / 4);
+}
+
+function truncateForTokenLimit(data, maxTokens = 8000) {
+    const text = typeof data === 'string' ? data : JSON.stringify(data);
+    const estimatedTokens = estimateTokens(text);
+    
+    if (estimatedTokens <= maxTokens) {
+        return data;
+    }
+    
+    // Truncate to fit within token limit
+    const maxChars = maxTokens * 4;
+    const truncated = text.substring(0, maxChars - 200) + '...\n[Content truncated due to size]';
+    
+    try {
+        return JSON.parse(truncated);
+    } catch {
+        return truncated;
+    }
+}
+
 // Simplified session management (just for PDF generation)
 const sessions = new Map();
 
@@ -183,58 +208,70 @@ async function searchSocialMedia(query) {
 }
 
 // ENHANCED FUNCTION HANDLERS
+// SIMPLIFIED WEB SEARCH FOR DEBUGGING
 async function handleWebSearch(query, sources = ['all'], dateRange = 'month') {
-    console.log('🌐 Starting MINIMAL web search for: "' + query + '"');
+    console.log('🌐 SIMPLIFIED web search for: "' + query + '"');
     
     try {
-        const results = {
+        // Test basic functionality first
+        const testResult = {
             query: query,
-            date: new Date().toLocaleDateString(),
-            reddit_discussions: [],
-            news_articles: [],
+            search_date: new Date().toLocaleDateString(),
+            status: 'success',
+            reddit: { found: 0, error: null },
+            news: { found: 0, error: null },
             total_mentions: 0
         };
         
-        // Quick Reddit search
-        if (sources.includes('reddit') || sources.includes('all')) {
+        // Try Reddit search with error catching
+        try {
+            console.log('🔍 Testing Reddit API...');
             const redditData = await searchRedditData(query);
-            results.reddit_discussions = redditData.slice(0, 2); // Only top 2 to save tokens
-            results.total_mentions += redditData.length;
-            console.log('✅ Reddit: ' + redditData.length + ' discussions found');
+            testResult.reddit.found = redditData.length;
+            testResult.total_mentions += redditData.length;
+            console.log('✅ Reddit test successful: ' + redditData.length + ' results');
+        } catch (redditError) {
+            console.log('❌ Reddit test failed: ' + redditError.message);
+            testResult.reddit.error = redditError.message;
         }
         
-        // Quick News search  
-        if (sources.includes('news') || sources.includes('all')) {
+        // Try News search with error catching
+        try {
+            console.log('📰 Testing News API...');
             const newsData = await searchNewsData(query);
-            results.news_articles = newsData.slice(0, 2); // Only top 2 to save tokens
-            results.total_mentions += newsData.length;
-            console.log('✅ News: ' + newsData.length + ' articles found');
+            testResult.news.found = newsData.length;
+            testResult.total_mentions += newsData.length;
+            console.log('✅ News test successful: ' + newsData.length + ' results');
+        } catch (newsError) {
+            console.log('❌ News test failed: ' + newsError.message);
+            testResult.news.error = newsError.message;
         }
         
-        // Simple summary
-        const summary = {
+        // Always return success with debug info
+        const finalResult = {
             search_successful: true,
-            query: query,
-            reddit_count: results.reddit_discussions.length,
-            news_count: results.news_articles.length,
-            reddit_urls: results.reddit_discussions.map(d => d.url),
-            news_titles: results.news_articles.map(a => a.title),
-            search_date: results.date,
-            total_mentions: results.total_mentions
+            debug_info: testResult,
+            summary: 'Search completed - Reddit: ' + testResult.reddit.found + ' posts, News: ' + testResult.news.found + ' articles',
+            total_mentions: testResult.total_mentions,
+            search_query: query,
+            timestamp: new Date().toISOString()
         };
         
-        console.log('✅ Minimal web search completed successfully');
-        console.log('📊 Returning compact summary: ' + JSON.stringify(summary).length + ' characters');
+        console.log('✅ Simplified web search completed');
+        console.log('📊 Final result size: ' + JSON.stringify(finalResult).length + ' characters');
         
-        return JSON.stringify(summary);
+        return JSON.stringify(finalResult);
         
     } catch (error) {
-        console.error('❌ Web search error:', error.message);
+        console.error('❌ Web search outer error:', error.message);
+        
+        // Return error info for debugging
         return JSON.stringify({
             search_successful: false,
             error: error.message,
             query: query,
-            fallback: 'Search function encountered an error'
+            debug: 'Function wrapper failed',
+            timestamp: new Date().toISOString()
         });
     }
 }
@@ -382,7 +419,6 @@ app.post('/chat', async (req, res) => {
                                     args.date_range || 'month'
                                 );
                                 console.log('📏 Web search output length: ' + output.length + ' chars');
-                                console.log('📏 Web search output tokens (estimated): ' + estimateTokens(output));
                             } else if (toolCall.function.name === 'analyze_market_data') {
                                 console.log('📊 Calling handleMarketAnalysis...');
                                 output = await handleMarketAnalysis(
@@ -390,7 +426,6 @@ app.post('/chat', async (req, res) => {
                                     args.analysis_type || 'sentiment'
                                 );
                                 console.log('📏 Market analysis output length: ' + output.length + ' chars');
-                                console.log('📏 Market analysis output tokens (estimated): ' + estimateTokens(output));
                             } else {
                                 console.log('❌ Unknown function called: ' + toolCall.function.name);
                                 output = JSON.stringify({ error: 'Unknown function', function: toolCall.function.name });
