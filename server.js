@@ -13,6 +13,8 @@ const openai = new OpenAI({
 
 const ASSISTANT_ID = process.env.ASSISTANT_ID || 'asst_2P5fw8JmadtFqerm6hcVkC5I';
 
+console.log('OpenAI configured with Assistant ID:', ASSISTANT_ID);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -230,15 +232,14 @@ app.get('/', (req, res) => {
         <div class="welcome-message">
             <strong>✅ Real-time market intelligence</strong> - Live data from Reddit, Google Reviews, Twitter, News, and more<br>
             <strong>✅ Advanced sentiment analysis</strong> - Comprehensive brand and product insights<br>
-            <strong>✅ Web crawling capabilities</strong> - Automatically gather information from multiple platforms<br>
+            <strong>✅ Smart response handling</strong> - Fast replies for greetings, detailed research for analysis<br>
             <strong>✅ Professional reports</strong> - Executive summaries, forecasting, and strategic recommendations<br>
             <strong>✅ AI assistance</strong> - Market intelligence plus general conversation<br><br>
             
-            Ask me to research any brand or product:<br>
-            <strong>"Analyze Nike's brand sentiment"</strong> • <strong>"Tesla customer feedback analysis"</strong> • <strong>"Coca-Cola vs Pepsi comparison"</strong><br><br>
+            <strong>Try a simple greeting:</strong> "Hi" or "Hello"<br>
+            <strong>Or ask for market research:</strong> "Analyze Nike's brand sentiment" • "Tesla customer feedback analysis"<br><br>
             
-            Or chat normally:<br>
-            <strong>"Hello, how are you?"</strong> • <strong>"What can you help with?"</strong> • <strong>"Explain market trends"</strong>
+            <em>Note: Simple greetings respond quickly, market research may take 1-2 minutes for comprehensive data gathering.</em>
         </div>
         
         <div class="chat-messages" id="chatMessages">
@@ -251,7 +252,7 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Ask for real-time market analysis or chat about anything...">
+                <input type="text" id="messageInput" placeholder="Try: 'Hi' for quick response or 'Analyze Nike sentiment' for market research...">
                 <button id="sendButton">➤</button>
             </div>
         </div>
@@ -366,14 +367,19 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Handle chat messages - Route everything to OpenAI Assistant
+// Handle chat messages - Smart timeout handling
 app.post('/chat', async (req, res) => {
   try {
     const { message } = req.body;
     console.log('Received message:', message);
-    console.log('Routing to OpenAI Assistant for real-time analysis');
     
-    // Route ALL queries to your OpenAI Assistant
+    // Determine if this is a simple greeting or complex query
+    const isSimpleGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening)$/i.test(message.trim());
+    const timeout = isSimpleGreeting ? 30 : 90; // 30 seconds for greetings, 90 for analysis
+    
+    console.log(`Query type: ${isSimpleGreeting ? 'Simple greeting' : 'Complex query'}, timeout: ${timeout}s`);
+    
+    // Try OpenAI Assistant first
     try {
       const thread = await openai.beta.threads.create();
       
@@ -386,18 +392,18 @@ app.post('/chat', async (req, res) => {
         assistant_id: ASSISTANT_ID
       });
 
-      // Wait for completion with longer timeout for web research
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       let attempts = 0;
-      const maxAttempts = 120; // 2 minutes for web crawling
+      const maxAttempts = timeout; // Use dynamic timeout
       
       while (runStatus.status === 'in_progress' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         attempts++;
         
-        if (attempts % 15 === 0) {
-          console.log('Assistant researching web data... attempt', attempts);
+        // Log progress less frequently for greetings
+        if (attempts % (isSimpleGreeting ? 10 : 15) === 0) {
+          console.log(`Assistant processing... attempt ${attempts}/${maxAttempts}`);
         }
       }
 
@@ -406,53 +412,91 @@ app.post('/chat', async (req, res) => {
         const assistantMessage = messages.data[0];
         
         if (assistantMessage && assistantMessage.content[0]) {
-          console.log('Real-time intelligence response received');
-          res.json({ response: assistantMessage.content[0].text.value });
-        } else {
-          res.json({ response: "I'm InsightEar GPT, ready to provide real-time market intelligence. What would you like me to research?" });
+          console.log('Assistant response received successfully');
+          return res.json({ response: assistantMessage.content[0].text.value });
         }
       } else if (runStatus.status === 'failed') {
         console.log('Assistant run failed:', runStatus.last_error);
-        res.json({ response: "I encountered an issue while gathering real-time data. Please try your query again." });
+        throw new Error('Assistant failed: ' + (runStatus.last_error?.message || 'Unknown error'));
       } else {
-        console.log('Assistant timeout during research');
-        res.json({ response: "I'm still gathering comprehensive real-time data. This might take a moment - please try again shortly." });
+        console.log(`Assistant timeout after ${attempts}s, status: ${runStatus.status}`);
+        throw new Error('Assistant timeout');
       }
-    } catch (error) {
-      console.error('OpenAI Assistant error:', error.message);
+    } catch (assistantError) {
+      console.log('Assistant failed, using fallback:', assistantError.message);
       
-      // Fallback to direct completion
+      // Smart fallback based on query type
       try {
+        let systemPrompt;
+        let maxTokens;
+        
+        if (isSimpleGreeting) {
+          systemPrompt = "You are InsightEar GPT, a friendly market intelligence assistant. Respond naturally to greetings and casual conversation.";
+          maxTokens = 200;
+        } else {
+          systemPrompt = "You are InsightEar GPT, an advanced market intelligence assistant. Provide helpful analysis and insights about brands, markets, and business topics. Be professional and informative.";
+          maxTokens = 1000;
+        }
+        
         const completion = await openai.chat.completions.create({
-          model: "gpt-4o",
+          model: "gpt-4o-mini", // Faster model for fallback
           messages: [
             {
               role: "system", 
-              content: "You are InsightEar GPT, an advanced market intelligence assistant. Provide real-time sentiment analysis, market research, and actionable insights."
+              content: systemPrompt
             },
             {
               role: "user", 
               content: message
             }
           ],
-          max_tokens: 1500,
+          max_tokens: maxTokens,
           temperature: 0.7
         });
         
         if (completion.choices[0]?.message?.content) {
           console.log('Fallback completion successful');
-          res.json({ response: completion.choices[0].message.content });
-        } else {
-          res.json({ response: "I'm InsightEar GPT, your real-time market intelligence assistant. What would you like me to research?" });
+          return res.json({ response: completion.choices[0].message.content });
         }
       } catch (fallbackError) {
-        console.error('Fallback failed:', fallbackError.message);
-        res.json({ response: "I'm experiencing technical difficulties. Please try your market intelligence query again." });
+        console.error('Fallback also failed:', fallbackError.message);
       }
     }
+    
+    // Final fallback with appropriate response
+    if (isSimpleGreeting) {
+      res.json({ 
+        response: "Hello! I'm InsightEar GPT, your market intelligence assistant. I can help you analyze brands, track sentiment, research markets, and answer general questions. What would you like to know?" 
+      });
+    } else {
+      res.json({ 
+        response: "I'm InsightEar GPT, ready to help with market intelligence and analysis. I can research brands, analyze sentiment, track competitors, and provide strategic insights. What would you like me to research?" 
+      });
+    }
+    
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Debug endpoint to check assistant configuration
+app.get('/debug-assistant', async (req, res) => {
+  try {
+    const assistant = await openai.beta.assistants.retrieve(ASSISTANT_ID);
+    res.json({
+      id: assistant.id,
+      name: assistant.name,
+      model: assistant.model,
+      tools: assistant.tools,
+      instructions_preview: assistant.instructions ? assistant.instructions.substring(0, 200) + '...' : 'No instructions'
+    });
+  } catch (error) {
+    res.json({
+      error: 'Failed to retrieve assistant',
+      message: error.message,
+      assistant_id: ASSISTANT_ID
+    });
   }
 });
 
@@ -509,6 +553,8 @@ process.on('SIGINT', () => {
 app.listen(port, '0.0.0.0', () => {
   console.log('InsightEar GPT server running on port', port);
   console.log('Server bound to 0.0.0.0:' + port);
+  console.log('Assistant ID configured:', ASSISTANT_ID);
+  console.log('Debug endpoint available at /debug-assistant');
   console.log('Ready for real-time market intelligence!');
 });
 
