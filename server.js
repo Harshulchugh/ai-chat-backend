@@ -139,32 +139,182 @@ function extractBrand(query) {
   return 'Brand/Product';
 }
 
-// Function to determine research type
-function getResearchType(query) {
+// Function to get brand/product description
+function getBrandDescription(brandName) {
+  const descriptions = {
+    'Coca-Cola': 'Coca-Cola is a carbonated soft drink manufactured by The Coca-Cola Company. Founded in 1886, it\'s one of the world\'s most recognizable brands and the leading cola beverage globally.',
+    'Nike': 'Nike is an American multinational corporation specializing in athletic footwear, apparel, equipment, and accessories. Founded in 1964, it\'s one of the world\'s largest suppliers of athletic shoes and apparel.',
+    'Tesla': 'Tesla is an American electric vehicle and clean energy company founded by Elon Musk. Known for electric cars, energy storage systems, and solar panels, Tesla has revolutionized the automotive industry.',
+    'Apple': 'Apple Inc. is a multinational technology company that designs and manufactures consumer electronics, software, and online services. Known for iPhone, iPad, Mac computers, and innovative design.',
+    'McDonald\'s': 'McDonald\'s is an American fast food company and the world\'s largest restaurant chain by revenue. Founded in 1940, it serves approximately 69 million customers daily in over 100 countries.',
+    'Starbucks': 'Starbucks Corporation is an American multinational chain of coffeehouses and roastery reserves. Founded in 1971, it\'s the world\'s largest coffeehouse chain with over 30,000 locations worldwide.',
+    'Amazon': 'Amazon is an American multinational technology company focusing on e-commerce, cloud computing, and artificial intelligence. Started as an online bookstore, it\'s now one of the world\'s largest companies.',
+    'Samsung': 'Samsung is a South Korean multinational conglomerate known for electronics, semiconductors, and smartphones. It\'s one of the world\'s largest technology companies and smartphone manufacturers.',
+    'BMW': 'BMW (Bayerische Motoren Werke) is a German multinational corporation producing luxury vehicles and motorcycles. Founded in 1916, it\'s known for premium cars and innovative automotive technology.',
+    'Google': 'Google is an American multinational technology company specializing in Internet-related services and products, including search engines, cloud computing, and advertising technologies.'
+  };
+  
+  return descriptions[brandName] || `${brandName} is a brand/product that has gained attention in the market. Let me analyze what people are saying about it.`;
+}
+
+// Function to determine response type based on query
+function determineResponseType(query) {
   const lowerQuery = query.toLowerCase();
   
-  if (lowerQuery.includes('brand') || lowerQuery.includes('reputation') || lowerQuery.includes('image')) {
-    return 'Brand Research';
+  // Conversational queries - respond naturally
+  if (lowerQuery.includes('what do you think') || lowerQuery.includes('your opinion') || lowerQuery.includes('tell me about')) {
+    return 'conversational';
   }
-  if (lowerQuery.includes('product') || lowerQuery.includes('quality') || lowerQuery.includes('features')) {
-    return 'Product Research';
+  
+  // Specific analysis requests - offer options
+  if (lowerQuery.includes('analysis') || lowerQuery.includes('research') || lowerQuery.includes('report')) {
+    return 'analysis_options';
   }
-  if (lowerQuery.includes('satisfaction') || lowerQuery.includes('experience') || lowerQuery.includes('service')) {
-    return 'Customer Experience';
-  }
+  
+  // Comparison queries - direct comparison format
   if (lowerQuery.includes('vs') || lowerQuery.includes('versus') || lowerQuery.includes('comparison')) {
-    return 'Competitive Intelligence';
+    return 'comparison';
   }
-  if (lowerQuery.includes('loyalty') || lowerQuery.includes('purchase') || lowerQuery.includes('buying')) {
-    return 'Consumer Behavior';
+  
+  // General brand inquiry - provide context first
+  return 'brand_context';
+}
+
+// Function to create conversational response
+function createConversationalResponse(data) {
+  const brand = data.brand;
+  const description = getBrandDescription(brand);
+  
+  let response = `**About ${brand}:**\n${description}\n\n`;
+  
+  response += `**What People Are Saying:**\n`;
+  response += `Based on my analysis of ${data.totalMentions} mentions across social media, reviews, and news sources, `;
+  
+  if (data.positive > 70) {
+    response += `${brand} enjoys very positive sentiment (${data.positive}%) among consumers. `;
+  } else if (data.positive > 50) {
+    response += `${brand} has generally positive sentiment (${data.positive}%) with some mixed opinions. `;
+  } else {
+    response += `${brand} shows mixed sentiment (${data.positive}% positive) with areas for improvement. `;
   }
-  return 'Market Intelligence';
+  
+  response += `The main conversation themes include ${data.sources[0].themes.join(', ')}.`;
+  
+  response += `\n\n**Key Insights:**\n`;
+  data.insights.forEach(insight => {
+    response += `• ${insight}\n`;
+  });
+  
+  response += `\n\n**Would you like me to:**\n`;
+  response += `🔍 <button onclick="requestFormat('detailed research report')" style="background:#007bff;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Generate detailed report</button>\n`;
+  response += `📊 <button onclick="requestFormat('visual sentiment breakdown')" style="background:#28a745;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Show visual dashboard</button>\n`;
+  response += `📈 <button onclick="requestFormat('strategic recommendations')" style="background:#17a2b8;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Get recommendations</button>\n`;
+  response += `💬 <button onclick="requestFormat('conversational analysis')" style="background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:15px;cursor:pointer;margin:2px;">Discuss insights</button>\n\n`;
+  response += `Or just ask me anything specific about ${brand}!`;
+  
+// Function to create executive summary
+function createExecutiveSummary(data) {
+  const brand = data.brand;
+  const description = getBrandDescription(brand);
+  
+  let response = `**Executive Summary: ${brand}**\n\n`;
+  response += `**Company Overview:** ${description}\n\n`;
+  
+  response += `**Key Findings:**\n`;
+  response += `• Overall sentiment: ${data.positive}% positive (${data.totalMentions} total mentions)\n`;
+  response += `• Primary sentiment drivers: ${data.sources[0].themes.join(', ')}\n`;
+  response += `• Market position: ${data.positive > 75 ? 'Strong positive' : data.positive > 60 ? 'Moderately positive' : 'Mixed'} consumer perception\n\n`;
+  
+  response += `**Strategic Implications:**\n`;
+  data.recommendations.slice(0, 2).forEach(rec => {
+    response += `• ${rec}\n`;
+  });
+  
+  response += `\n📄 For detailed analysis, ask for "full report" or "visual dashboard"`;
+  
+  return response;
+}
+
+// Function to create bullet point analysis
+function createBulletPointAnalysis(data) {
+  const brand = data.brand;
+  
+  let response = `**${brand} - Quick Analysis**\n\n`;
+  
+  response += `**📊 Sentiment Breakdown:**\n`;
+  response += `• Positive: ${data.positive}%\n`;
+  response += `• Neutral: ${data.neutral}%\n`;
+  response += `• Negative: ${data.negative}%\n`;
+  response += `• Total mentions: ${data.totalMentions}\n\n`;
+  
+  response += `**🌐 Top Sources:**\n`;
+  data.sources.forEach(source => {
+    response += `• ${source.platform}: ${source.mentions} mentions (${source.sentiment})\n`;
+  });
+  
+  response += `\n**💡 Key Insights:**\n`;
+  data.insights.forEach(insight => {
+    response += `• ${insight}\n`;
+  });
+  
+  response += `\n**🎯 Next Steps:**\n`;
+  data.recommendations.forEach(rec => {
+    response += `• ${rec}\n`;
+  });
+  
+  response += `\n📋 Ask for "detailed report" for comprehensive analysis`;
+  
+  return response;
+}
+
+// Function to create analysis options response
+function createAnalysisOptionsResponse(data) {
+  const brand = data.brand;
+  const description = getBrandDescription(brand);
+  
+  let response = `**${brand} Overview:**\n${description}\n\n`;
+  
+  response += `I can provide different types of analysis for ${brand}. What would you prefer?\n\n`;
+  
+  response += `<button onclick="requestFormat('quick sentiment summary')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Quick Sentiment Summary</button> `;
+  response += `<button onclick="requestFormat('detailed research report')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📋 Detailed Research Report</button>\n`;
+  response += `<button onclick="requestFormat('conversational analysis')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">💬 Conversational Analysis</button> `;
+  response += `<button onclick="requestFormat('visual dashboard')" style="background:#6f42c1;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📈 Visual Dashboard</button>\n\n`;
+  
+  response += `**Custom Formats:**\n`;
+  response += `<button onclick="requestFormat('executive summary')" style="background:#fd7e14;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Executive Summary</button> `;
+  response += `<button onclick="requestFormat('bullet points')" style="background:#20c997;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Bullet Points</button> `;
+  response += `<button onclick="requestFormat('narrative style')" style="background:#e83e8c;color:white;border:none;padding:6px 10px;border-radius:15px;cursor:pointer;margin:3px;">Narrative Style</button>\n\n`;
+  
+  response += `What type of analysis and format would work best for you?`;
+  
+  return response;
+}
+
+// Function to create brand context response
+function createBrandContextResponse(data) {
+  const brand = data.brand;
+  const description = getBrandDescription(brand);
+  
+  let response = `**${brand}**\n${description}\n\n`;
+  
+  response += `**Current Market Sentiment:** ${data.positive}% positive sentiment from ${data.totalMentions} mentions\n\n`;
+  
+  response += `I can help you understand ${brand} better. What specifically interests you?\n\n`;
+  response += `<button onclick="quickAnalysis('${brand}', 'brand')" style="background:#007bff;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🏢 Brand Analysis</button> `;
+  response += `<button onclick="quickAnalysis('${brand}', 'customer sentiment')" style="background:#28a745;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">👥 Customer Sentiment</button>\n`;
+  response += `<button onclick="quickAnalysis('${brand}', 'market performance')" style="background:#17a2b8;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">📊 Market Performance</button> `;
+  response += `<button onclick="requestFormat('full analysis')" style="background:#dc3545;color:white;border:none;padding:8px 12px;border-radius:20px;cursor:pointer;margin:5px;">🔍 Full Analysis</button>\n\n`;
+  
+  response += `Just ask me about any aspect that interests you, or say "full analysis" for a complete report!`;
+  
+  return response;
 }
 
 // Function to generate mock intelligence data
 function generateIntelligenceData(query) {
   const brand = extractBrand(query);
-  const researchType = getResearchType(query);
+  const responseType = determineResponseType(query);
   
   // Generate realistic but varied data
   const basePositive = 65 + Math.floor(Math.random() * 20);
@@ -180,7 +330,7 @@ function generateIntelligenceData(query) {
   return {
     query: query,
     brand: brand,
-    researchType: researchType,
+    responseType: responseType,
     positive: basePositive,
     neutral: baseNeutral,
     negative: baseNegative,
@@ -215,32 +365,28 @@ function generateIntelligenceData(query) {
         themes: ['PR coverage', 'announcements']
       }
     ],
-    insights: generateInsights(brand, researchType, basePositive),
-    recommendations: generateRecommendations(brand, researchType, basePositive),
+    insights: generateInsights(brand, responseType, basePositive),
+    recommendations: generateRecommendations(brand, responseType, basePositive),
     reportId: Date.now().toString()
   };
 }
 
-// Function to generate insights based on research type
-function generateInsights(brand, researchType, sentiment) {
+// Function to generate insights based on response type
+function generateInsights(brand, responseType, sentiment) {
   const insights = [];
   
-  if (researchType === 'Brand Research') {
-    insights.push('Strong brand equity with ' + sentiment + '% positive sentiment across platforms');
-    insights.push('Brand recognition significantly above industry benchmarks');
-    insights.push('Trust and credibility metrics show consistent upward trajectory');
-  } else if (researchType === 'Product Research') {
-    insights.push('Product quality ratings exceed customer expectations');
-    insights.push('Feature satisfaction scores above industry average');
-    insights.push('Innovation perception drives positive sentiment');
-  } else if (researchType === 'Customer Experience') {
-    insights.push('Customer satisfaction levels trending upward');
-    insights.push('Service quality recognized as key differentiator');
-    insights.push('Customer journey optimization showing positive impact');
-  } else if (researchType === 'Competitive Intelligence') {
-    insights.push('Market positioning strength relative to competitors');
-    insights.push('Differentiation strategy resonating with target audience');
-    insights.push('Competitive advantages clearly perceived by consumers');
+  if (responseType === 'conversational' || responseType === 'brand_context') {
+    insights.push(`${brand} shows ${sentiment > 75 ? 'excellent' : sentiment > 60 ? 'good' : 'mixed'} market sentiment across digital platforms`);
+    insights.push('Consumer discussions indicate strong brand recognition and engagement');
+    insights.push('Social media presence drives significant portion of brand conversations');
+  } else if (responseType === 'analysis_options') {
+    insights.push('Comprehensive data available across multiple consumer touchpoints');
+    insights.push('Brand performance metrics show consistent patterns over time');
+    insights.push('Multiple analysis formats available to suit different business needs');
+  } else if (responseType === 'comparison') {
+    insights.push('Competitive positioning analysis reveals distinct market advantages');
+    insights.push('Brand differentiation clearly perceived by target consumers');
+    insights.push('Market share dynamics indicate strategic opportunities');
   } else {
     insights.push('Overall market sentiment trending positive');
     insights.push('Brand mentions showing consistent growth');
@@ -251,21 +397,21 @@ function generateInsights(brand, researchType, sentiment) {
 }
 
 // Function to generate recommendations
-function generateRecommendations(brand, researchType, sentiment) {
+function generateRecommendations(brand, responseType, sentiment) {
   const recommendations = [];
   
   if (sentiment > 75) {
-    recommendations.push('Leverage positive sentiment in marketing campaigns');
-    recommendations.push('Expand into new market segments while maintaining quality');
+    recommendations.push('Leverage positive sentiment in marketing campaigns and brand messaging');
+    recommendations.push('Expand market presence while maintaining current quality standards');
     recommendations.push('Develop brand advocacy programs to amplify positive word-of-mouth');
   } else if (sentiment > 60) {
-    recommendations.push('Focus on addressing neutral sentiment segments');
-    recommendations.push('Enhance customer experience at key touchpoints');
-    recommendations.push('Strengthen brand messaging for better differentiation');
+    recommendations.push('Focus on converting neutral sentiment segments through targeted messaging');
+    recommendations.push('Enhance customer experience at key brand touchpoints');
+    recommendations.push('Strengthen brand differentiation in competitive messaging');
   } else {
-    recommendations.push('Implement reputation management strategy');
-    recommendations.push('Address core issues causing negative sentiment');
-    recommendations.push('Develop crisis communication plan for brand recovery');
+    recommendations.push('Implement comprehensive reputation management strategy');
+    recommendations.push('Address core issues driving negative sentiment patterns');
+    recommendations.push('Develop crisis communication protocols for brand recovery');
   }
   
   return recommendations;
@@ -277,7 +423,7 @@ function createIntelligenceHTML(data) {
   
   // Header
   html += '<div class="report-header">';
-  html += '<h2>📊 ' + data.brand + ' - ' + data.researchType + '</h2>';
+  html += '<h2>📊 ' + data.brand + ' - Market Intelligence Report</h2>';
   html += '</div>';
   
   // Sentiment Overview
@@ -720,16 +866,17 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="welcome-message">
-            <strong>✅ Consumer sentiment analysis</strong><br>
-            <strong>✅ Brand perception research</strong><br>
-            <strong>✅ Competitive intelligence</strong><br>
-            <strong>✅ Product feedback analysis</strong><br>
-            <strong>✅ Professional research reports</strong><br>
-            <strong>✅ General AI assistance</strong><br><br>
+            <strong>✅ Smart market intelligence</strong> - I provide context first, then ask what you need<br>
+            <strong>✅ Flexible analysis formats</strong> - Choose from reports, conversations, or custom formats<br>
+            <strong>✅ Brand expertise</strong> - I know major brands and provide background context<br>
+            <strong>✅ Interactive experience</strong> - I'll guide you to the right analysis type<br>
+            <strong>✅ General AI assistance</strong> - Plus normal conversations about anything<br><br>
             
-            Try these examples:<br>
-            <strong>Market Intelligence:</strong> "What do customers think about Nike?" • "Tesla brand reputation analysis" • "iPhone vs Samsung comparison"<br>
-            <strong>General Chat:</strong> "Hello, how are you?" • "Tell me about artificial intelligence" • "What can you help me with?"
+            Try asking about brands naturally:<br>
+            <strong>"What do you think about Nike?"</strong> • <strong>"Tell me about Tesla"</strong> • <strong>"I want to understand Coca-Cola"</strong><br><br>
+            
+            Or chat normally:<br>
+            <strong>"Hello, how are you?"</strong> • <strong>"What can you help with?"</strong> • <strong>"Explain machine learning"</strong>
         </div>
         
         <div class="chat-messages" id="chatMessages">
@@ -742,7 +889,7 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Ask about brands, market analysis, or chat about anything..." onkeypress="handleKeyPress(event)">
+                <input type="text" id="messageInput" placeholder="Ask naturally: 'What do you think about Nike?' or chat about anything..." onkeypress="handleKeyPress(event)">
                 <button id="sendButton" onclick="sendMessage()">➤</button>
             </div>
         </div>
@@ -825,6 +972,20 @@ app.get('/', (req, res) => {
             window.open('/download-report/' + reportId, '_blank');
         }
 
+        function requestFormat(format) {
+            console.log('Requesting format:', format);
+            const input = document.getElementById('messageInput');
+            input.value = format;
+            sendMessage();
+        }
+
+        function quickAnalysis(brand, type) {
+            console.log('Quick analysis for:', brand, type);
+            const input = document.getElementById('messageInput');
+            input.value = `${type} analysis for ${brand}`;
+            sendMessage();
+        }
+
         // File upload handling
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const files = event.target.files;
@@ -855,9 +1016,8 @@ app.post('/chat', async (req, res) => {
     if (needsIntelligence(message)) {
       console.log('Intelligence analysis needed');
       const intelligenceData = generateIntelligenceData(message);
-      const htmlResponse = createIntelligenceHTML(intelligenceData);
       
-      // Store report data for PDF generation (with cleanup)
+      // Store report data for potential PDF generation
       global.reportData = global.reportData || {};
       global.reportData[intelligenceData.reportId] = intelligenceData;
       
@@ -868,10 +1028,66 @@ app.post('/chat', async (req, res) => {
         delete global.reportData[oldestKey];
       }
       
-      res.json({ response: htmlResponse });
-    } else {
-      console.log('Regular chat needed');
-      // Use OpenAI Assistant for regular conversation
+      // Determine response format based on query type
+      let response;
+      
+      switch (intelligenceData.responseType) {
+        case 'conversational':
+          response = createConversationalResponse(intelligenceData);
+          break;
+        case 'analysis_options':
+          response = createAnalysisOptionsResponse(intelligenceData);
+          break;
+        case 'brand_context':
+          response = createBrandContextResponse(intelligenceData);
+          break;
+        case 'comparison':
+          // For comparisons, create detailed HTML report
+          response = createIntelligenceHTML(intelligenceData);
+          break;
+        default:
+          response = createBrandContextResponse(intelligenceData);
+      }
+      
+      // Store the format preference for follow-up questions
+      global.userPreferences = global.userPreferences || {};
+      global.userPreferences[intelligenceData.reportId] = {
+        brand: intelligenceData.brand,
+        lastQuery: message,
+        responseType: intelligenceData.responseType
+      };
+      
+      res.json({ response: response });
+      } else {
+        console.log('Regular chat needed');
+        
+        // Check if this is a follow-up format request
+        const formatRequests = ['detailed report', 'full analysis', 'visual dashboard', 'executive summary', 'bullet points', 'narrative style', 'conversational analysis'];
+        const isFormatRequest = formatRequests.some(format => message.toLowerCase().includes(format));
+        
+        if (isFormatRequest && global.userPreferences) {
+          // Handle format request for previous brand analysis
+          const lastPreference = Object.values(global.userPreferences).pop();
+          if (lastPreference) {
+            const mockData = generateIntelligenceData(`${message} ${lastPreference.brand}`);
+            
+            if (message.toLowerCase().includes('detailed report') || message.toLowerCase().includes('full analysis')) {
+              const htmlResponse = createIntelligenceHTML(mockData);
+              return res.json({ response: htmlResponse });
+            } else if (message.toLowerCase().includes('conversational')) {
+              const conversationalResponse = createConversationalResponse(mockData);
+              return res.json({ response: conversationalResponse });
+            } else if (message.toLowerCase().includes('executive summary')) {
+              const summaryResponse = createExecutiveSummary(mockData);
+              return res.json({ response: summaryResponse });
+            } else if (message.toLowerCase().includes('bullet points')) {
+              const bulletResponse = createBulletPointAnalysis(mockData);
+              return res.json({ response: bulletResponse });
+            }
+          }
+        }
+        
+        // Regular OpenAI Assistant conversation
       try {
         const thread = await openai.beta.threads.create();
         
