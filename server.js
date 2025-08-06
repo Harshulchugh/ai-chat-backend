@@ -32,7 +32,7 @@ const upload = multer({
 const INTELLIGENCE_KEYWORDS = [
   // Brand Research
   'brand', 'reputation', 'image', 'perception', 'trust', 'credibility', 'equity', 'positioning', 'awareness', 'recognition',
-  // Consumer Insights
+  // Consumer Insights  
   'sentiment', 'think', 'feel', 'opinion', 'saying', 'people', 'customers', 'users', 'consumers', 'audience',
   // Market Research
   'analysis', 'insights', 'research', 'market', 'trends', 'performance', 'growth', 'share', 'competitive',
@@ -45,26 +45,98 @@ const INTELLIGENCE_KEYWORDS = [
   // Behavioral Research
   'behavior', 'purchase', 'buying', 'loyalty', 'retention', 'advocacy', 'recommendation', 'word-of-mouth',
   // Competitive Intelligence
-  'comparison', 'versus', 'vs', 'compete', 'competitor', 'alternative', 'benchmark', 'industry'
+  'comparison', 'versus', 'vs', 'compete', 'competitor', 'alternative', 'benchmark', 'industry',
+  // Inquiry patterns
+  'about', 'understand', 'know', 'learn', 'tell', 'explain', 'information', 'details', 'facts'
 ];
+
+// Brand name mappings for better recognition
+const BRAND_MAPPINGS = {
+  'coke': 'Coca-Cola',
+  'mcdonalds': "McDonald's", 
+  'mcdonald': "McDonald's",
+  'mcds': "McDonald's",
+  'apple': 'Apple',
+  'iphone': 'iPhone',
+  'tesla': 'Tesla',
+  'nike': 'Nike',
+  'starbucks': 'Starbucks',
+  'amazon': 'Amazon',
+  'google': 'Google',
+  'microsoft': 'Microsoft',
+  'samsung': 'Samsung',
+  'bmw': 'BMW',
+  'toyota': 'Toyota',
+  'ford': 'Ford',
+  'pepsi': 'Pepsi',
+  'adidas': 'Adidas',
+  'walmart': 'Walmart',
+  'target': 'Target'
+};
 
 // Function to check if query needs intelligence analysis
 function needsIntelligence(query) {
   const lowerQuery = query.toLowerCase();
-  return INTELLIGENCE_KEYWORDS.some(keyword => lowerQuery.includes(keyword));
+  
+  // Check for intelligence keywords
+  const hasIntelligenceKeyword = INTELLIGENCE_KEYWORDS.some(keyword => lowerQuery.includes(keyword));
+  
+  // Check for brand names (if asking about a brand, likely needs intelligence)
+  const hasBrandName = Object.keys(BRAND_MAPPINGS).some(brand => lowerQuery.includes(brand));
+  
+  // Check for common intelligence patterns
+  const intelligencePatterns = [
+    /tell me about \w+/,
+    /what.*think.*about/,
+    /how.*doing/,
+    /understand.*\w+/,
+    /learn.*about/,
+    /information.*about/,
+    /\w+ vs \w+/,
+    /\w+ versus \w+/,
+    /opinion.*\w+/,
+    /feedback.*\w+/,
+    /review.*\w+/
+  ];
+  
+  const hasIntelligencePattern = intelligencePatterns.some(pattern => pattern.test(lowerQuery));
+  
+  return hasIntelligenceKeyword || hasBrandName || hasIntelligencePattern;
 }
 
 // Function to extract brand/product from query
 function extractBrand(query) {
-  // Remove common intelligence keywords to isolate brand name
-  let brand = query.toLowerCase();
-  const removeWords = ['what', 'are', 'people', 'saying', 'about', 'brand', 'sentiment', 'analysis', 'of', 'the', 'how', 'is', 'do', 'customers', 'think'];
+  let lowerQuery = query.toLowerCase();
   
+  // Check for known brand mappings first
+  for (const [key, value] of Object.entries(BRAND_MAPPINGS)) {
+    if (lowerQuery.includes(key)) {
+      return value;
+    }
+  }
+  
+  // Remove common words to isolate brand name
+  const removeWords = [
+    'what', 'are', 'people', 'saying', 'about', 'brand', 'sentiment', 'analysis', 
+    'of', 'the', 'how', 'is', 'do', 'customers', 'think', 'tell', 'me', 'understand',
+    'want', 'to', 'know', 'learn', 'information', 'details', 'facts', 'explain',
+    'you', 'can', 'help', 'with', 'regarding', 'concerning', 'company', 'product'
+  ];
+  
+  let brandName = lowerQuery;
   removeWords.forEach(word => {
-    brand = brand.replace(new RegExp('\\b' + word + '\\b', 'g'), '');
+    brandName = brandName.replace(new RegExp('\\b' + word + '\\b', 'g'), '');
   });
   
-  return brand.trim().replace(/\s+/g, ' ');
+  // Clean up and capitalize
+  brandName = brandName.trim().replace(/\s+/g, ' ');
+  if (brandName) {
+    return brandName.split(' ').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+  
+  return 'Brand/Product';
 }
 
 // Function to determine research type
@@ -652,13 +724,12 @@ app.get('/', (req, res) => {
             <strong>✅ Brand perception research</strong><br>
             <strong>✅ Competitive intelligence</strong><br>
             <strong>✅ Product feedback analysis</strong><br>
-            <strong>✅ Professional research reports</strong><br><br>
+            <strong>✅ Professional research reports</strong><br>
+            <strong>✅ General AI assistance</strong><br><br>
             
-            Try these research examples:<br>
-            "What do customers think about Nike?"<br>
-            "Tesla brand reputation analysis"<br>
-            "iPhone vs Samsung comparison"<br>
-            "Starbucks customer satisfaction"
+            Try these examples:<br>
+            <strong>Market Intelligence:</strong> "What do customers think about Nike?" • "Tesla brand reputation analysis" • "iPhone vs Samsung comparison"<br>
+            <strong>General Chat:</strong> "Hello, how are you?" • "Tell me about artificial intelligence" • "What can you help me with?"
         </div>
         
         <div class="chat-messages" id="chatMessages">
@@ -671,7 +742,7 @@ app.get('/', (req, res) => {
                     <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.xls">
                     <div class="file-upload-btn">📎</div>
                 </div>
-                <input type="text" id="messageInput" placeholder="Ask about brand sentiment, market analysis, or anything else..." onkeypress="handleKeyPress(event)">
+                <input type="text" id="messageInput" placeholder="Ask about brands, market analysis, or chat about anything..." onkeypress="handleKeyPress(event)">
                 <button id="sendButton" onclick="sendMessage()">➤</button>
             </div>
         </div>
@@ -813,15 +884,20 @@ app.post('/chat', async (req, res) => {
           assistant_id: ASSISTANT_ID
         });
 
-        // Wait for completion with timeout
+        // Wait for completion with longer timeout and better error handling
         let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
         let attempts = 0;
-        const maxAttempts = 30;
+        const maxAttempts = 60; // Increased timeout to 60 seconds
         
         while (runStatus.status === 'in_progress' && attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
           attempts++;
+          
+          // Log progress every 10 seconds
+          if (attempts % 10 === 0) {
+            console.log('Assistant still processing... attempt', attempts);
+          }
         }
 
         if (runStatus.status === 'completed') {
@@ -829,17 +905,50 @@ app.post('/chat', async (req, res) => {
           const assistantMessage = messages.data[0];
           
           if (assistantMessage && assistantMessage.content[0]) {
+            console.log('Assistant response received');
             res.json({ response: assistantMessage.content[0].text.value });
           } else {
-            res.json({ response: "I'm here to help with market intelligence and general questions. How can I assist you today?" });
+            console.log('Assistant response empty, using fallback');
+            res.json({ response: "I'm here to help with market intelligence and any questions you have. What would you like to know?" });
           }
+        } else if (runStatus.status === 'failed') {
+          console.log('Assistant run failed:', runStatus.last_error);
+          res.json({ response: "I'm experiencing some technical difficulties. Let me help you with market intelligence instead - try asking about a brand or product!" });
         } else {
-          // Fallback response
-          res.json({ response: "I'm InsightEar GPT, your market intelligence assistant. I can help analyze brand sentiment, conduct competitive research, and provide consumer insights. What would you like to know?" });
+          console.log('Assistant timeout, status:', runStatus.status);
+          res.json({ response: "My response is taking longer than expected. While I process that, feel free to ask me about brand sentiment, market analysis, or any other topic!" });
         }
       } catch (error) {
-        console.error('OpenAI error:', error);
-        res.json({ response: "I'm here to help with market analysis and general questions. How can I assist you today?" });
+        console.error('OpenAI error:', error.message);
+        
+        // Try direct completion as fallback
+        try {
+          const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+              {
+                role: "system", 
+                content: "You are InsightEar GPT, a market intelligence assistant. You can also help with general questions and conversation. Be helpful, friendly, and informative."
+              },
+              {
+                role: "user", 
+                content: message
+              }
+            ],
+            max_tokens: 500,
+            temperature: 0.7
+          });
+          
+          if (completion.choices[0]?.message?.content) {
+            console.log('Fallback completion successful');
+            res.json({ response: completion.choices[0].message.content });
+          } else {
+            res.json({ response: "I'm here to help! I can analyze market sentiment, brand perception, competitive intelligence, and answer general questions. What would you like to know?" });
+          }
+        } catch (fallbackError) {
+          console.error('Fallback completion failed:', fallbackError.message);
+          res.json({ response: "I'm here to help! I can analyze market sentiment, brand perception, competitive intelligence, and answer general questions. What would you like to know?" });
+        }
       }
     }
   } catch (error) {
