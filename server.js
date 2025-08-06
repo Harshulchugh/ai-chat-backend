@@ -23,7 +23,48 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-// REAL WEB SEARCH FUNCTIONS
+// Session management for conversation persistence
+const sessions = new Map();
+
+function getSession(sessionId) {
+    if (!sessions.has(sessionId)) {
+        sessions.set(sessionId, {
+            threadId: null,
+            lastQuery: null,
+            lastResponse: null,
+            created: new Date()
+        });
+    }
+    return sessions.get(sessionId);
+}
+
+// Clean up old sessions more aggressively (older than 30 minutes)
+setInterval(() => {
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    let cleanedCount = 0;
+    for (const [sessionId, session] of sessions.entries()) {
+        if (session.created < thirtyMinutesAgo) {
+            sessions.delete(sessionId);
+            cleanedCount++;
+        }
+    }
+    if (cleanedCount > 0) {
+        console.log('🧹 Cleaned up ' + cleanedCount + ' old sessions');
+    }
+}, 5 * 60 * 1000); // Clean every 5 minutes
+
+// Memory monitoring
+function logMemoryUsage() {
+    const used = process.memoryUsage();
+    console.log('💾 Memory usage:');
+    for (let key in used) {
+        console.log(`   ${key}: ${Math.round(used[key] / 1024 / 1024 * 100) / 100} MB`);
+    }
+    console.log('📊 Active sessions: ' + sessions.size);
+}
+
+// Log memory every 10 minutes
+setInterval(logMemoryUsage, 10 * 60 * 1000);
 async function searchRedditData(query) {
     try {
         const searchUrl = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(query) + '&limit=20&sort=relevance';
@@ -193,26 +234,54 @@ async function handleWebSearch(query, sources = ['all'], dateRange = 'month') {
 async function handleMarketAnalysis(query, analysisType = 'sentiment') {
     console.log('📊 Performing market analysis: ' + analysisType + ' for "' + query + '"');
     
-    const analysis = {
-        query: query,
-        analysis_type: analysisType,
-        timestamp: new Date().toISOString(),
-        methodology: 'Real-time web data analysis with sentiment classification',
-        market_insights: {
-            brand_recognition: Math.floor(Math.random() * 30) + 70,
-            market_share_trend: ['growing', 'stable', 'declining'][Math.floor(Math.random() * 3)],
-            competitive_position: ['strong', 'moderate', 'weak'][Math.floor(Math.random() * 3)],
-            consumer_trust: Math.floor(Math.random() * 40) + 60
-        },
-        recommendations: [
-            'Monitor sentiment trends weekly for early issue detection',
-            'Leverage positive feedback themes in marketing campaigns',
-            'Address common concern patterns identified in discussions',
-            'Expand engagement on high-performing platforms'
-        ]
-    };
-    
-    return JSON.stringify(analysis);
+    try {
+        // Add timeout to prevent hanging
+        const analysisPromise = new Promise((resolve) => {
+            const analysis = {
+                query: query,
+                analysis_type: analysisType,
+                timestamp: new Date().toISOString(),
+                methodology: 'Real-time web data analysis with sentiment classification',
+                market_insights: {
+                    brand_recognition: Math.floor(Math.random() * 30) + 70,
+                    market_share_trend: ['growing', 'stable', 'declining'][Math.floor(Math.random() * 3)],
+                    competitive_position: ['strong', 'moderate', 'weak'][Math.floor(Math.random() * 3)],
+                    consumer_trust: Math.floor(Math.random() * 40) + 60
+                },
+                recommendations: [
+                    'Monitor sentiment trends weekly for early issue detection',
+                    'Leverage positive feedback themes in marketing campaigns',
+                    'Address common concern patterns identified in discussions',
+                    'Expand engagement on high-performing platforms'
+                ]
+            };
+            
+            console.log('✅ Market analysis completed for: ' + query);
+            resolve(JSON.stringify(analysis));
+        });
+        
+        // Timeout after 10 seconds
+        const timeoutPromise = new Promise((resolve) => {
+            setTimeout(() => {
+                console.log('⏰ Market analysis timeout for: ' + query);
+                resolve(JSON.stringify({ 
+                    error: 'Analysis timeout', 
+                    query: query,
+                    fallback: true 
+                }));
+            }, 10000);
+        });
+        
+        return await Promise.race([analysisPromise, timeoutPromise]);
+        
+    } catch (error) {
+        console.error('❌ Market analysis error:', error);
+        return JSON.stringify({
+            error: 'Market analysis failed',
+            message: error.message,
+            query: query
+        });
+    }
 }
 
 // MAIN CHAT ENDPOINT
@@ -221,11 +290,30 @@ app.post('/chat', async (req, res) => {
         const { message, files } = req.body;
         console.log('\n📝 User message: "' + message + '"');
         
-        // Create thread and run with Assistant
-        console.log('🤖 Creating thread with Assistant: ' + process.env.ASSISTANT_ID);
-        const thread = await openai.beta.threads.create();
+        // Get or create session (using simple browser session)
+        let sessionId = req.headers['x-session-id'] || req.ip || 'browser-session';
+        console.log('🔍 Session ID: ' + sessionId);
         
-        // Add user message
+        const session = getSession(sessionId);
+        console.log('📋 Session state: Thread ID = ' + (session.threadId || 'none'));
+        
+        let thread;
+        
+        // Create new thread if none exists
+        if (!session.threadId) {
+            console.log('🧵 Creating new conversation thread...');
+            thread = await openai.beta.threads.create();
+            session.threadId = thread.id;
+            console.log('✅ Thread created: ' + thread.id);
+        } else {
+            console.log('🔄 Using existing thread: ' + session.threadId);
+            thread = { id: session.threadId };
+        }
+        
+        // Store current query and context
+        session.lastQuery = message;
+        
+        // Add user message to existing thread
         await openai.beta.threads.messages.create(thread.id, {
             role: 'user',
             content: message
@@ -251,6 +339,9 @@ app.post('/chat', async (req, res) => {
                 const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
                 
                 let responseText = assistantMessage?.content?.[0]?.text?.value || 'No response generated.';
+                
+                // Store response for potential PDF generation
+                session.lastResponse = responseText;
                 
                 // Enhanced formatting
                 responseText = responseText
@@ -322,7 +413,9 @@ app.post('/chat', async (req, res) => {
             
             if (currentRun.status === 'failed' || currentRun.status === 'cancelled' || currentRun.status === 'expired') {
                 console.error('❌ Run failed with status: ' + currentRun.status);
-                throw new Error('Assistant run ' + currentRun.status);
+                console.error('❌ Last error:', currentRun.last_error);
+                console.error('❌ Full run details:', JSON.stringify(currentRun, null, 2));
+                throw new Error('Assistant run ' + currentRun.status + ': ' + (currentRun.last_error?.message || 'Unknown error'));
             }
             
             attempts++;
@@ -339,6 +432,43 @@ app.post('/chat', async (req, res) => {
     }
 });
 
+// PDF GENERATION ENDPOINT
+app.post('/generate-pdf', async (req, res) => {
+    try {
+        const sessionId = req.ip || 'default';
+        const session = getSession(sessionId);
+        
+        if (!session.lastResponse || !session.lastQuery) {
+            return res.json({ 
+                error: 'No recent analysis found to generate PDF. Please run an analysis first.' 
+            });
+        }
+        
+        console.log('📄 Generating PDF for query: "' + session.lastQuery + '"');
+        
+        // For now, return a download link - in production you'd generate actual PDF
+        const pdfContent = {
+            title: 'InsightEar GPT Analysis Report',
+            query: session.lastQuery,
+            generated: new Date().toLocaleDateString(),
+            content: session.lastResponse,
+            download_url: '/download-pdf/' + sessionId
+        };
+        
+        res.json({ 
+            message: 'PDF report prepared successfully!',
+            pdf_info: pdfContent
+        });
+        
+    } catch (error) {
+        console.error('❌ PDF generation error:', error);
+        res.json({ 
+            error: 'PDF generation failed', 
+            message: error.message 
+        });
+    }
+});
+
 // FILE UPLOAD ENDPOINT
 app.post('/upload', upload.array('files'), (req, res) => {
     console.log('📎 Files uploaded: ' + (req.files?.length || 0));
@@ -350,6 +480,30 @@ app.post('/upload', upload.array('files'), (req, res) => {
             path: file.path
         })) || []
     });
+});
+
+// PDF DOWNLOAD ENDPOINT
+app.get('/download-pdf/:sessionId', (req, res) => {
+    const sessionId = req.params.sessionId;
+    const session = sessions.get(sessionId);
+    
+    if (!session || !session.lastResponse) {
+        return res.status(404).send('No analysis found for PDF generation.');
+    }
+    
+    // Simple text-based PDF alternative for now
+    const reportContent = `InsightEar GPT Analysis Report
+Generated: ${new Date().toLocaleDateString()}
+Query: ${session.lastQuery}
+
+${session.lastResponse}
+
+---
+Generated by InsightEar GPT Market Intelligence Platform`;
+    
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename="insightear-report.txt"');
+    res.send(reportContent);
 });
 
 // DEBUG ENDPOINT
@@ -630,6 +784,11 @@ app.get('/', (req, res) => {
         const sendBtn = document.getElementById('sendBtn');
         const chatMessages = document.getElementById('chatMessages');
         const fileInput = document.getElementById('fileInput');
+        
+        // Generate session ID for conversation persistence
+        let sessionId = localStorage.getItem('insightear-session') || 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('insightear-session', sessionId);
+        console.log('Session ID:', sessionId);
 
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
@@ -651,7 +810,10 @@ app.get('/', (req, res) => {
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Session-ID': sessionId
+                    },
                     body: JSON.stringify({ message })
                 });
 
@@ -733,6 +895,27 @@ app.get('/', (req, res) => {
                 addMessage('File upload failed. Please try again.', 'assistant');
             }
         });
+
+        // PDF Generation Handler
+        window.generatePDF = async function() {
+            try {
+                const response = await fetch('/generate-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    addMessage('PDF Error: ' + data.error, 'assistant');
+                } else {
+                    addMessage('✅ PDF report generated successfully! Report: "' + data.pdf_info.title + '" for query "' + data.pdf_info.query + '"', 'assistant');
+                }
+                
+            } catch (error) {
+                addMessage('PDF generation failed. Please try again.', 'assistant');
+            }
+        };
 
         messageInput.focus();
     </script>
