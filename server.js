@@ -5,6 +5,7 @@ const cors = require('cors');
 const https = require('https');
 const path = require('path');
 const fs = require('fs');
+const pdf = require('pdf-parse'); // For PDF file parsing
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -106,6 +107,14 @@ function getCompanyBackground(query) {
             headquarters: 'Pawtucket, Rhode Island, USA',
             key_products: ['Action figures', 'Board games', 'Dolls', 'Electronic games'],
             market_position: 'Leading global toy and entertainment company'
+        },
+        'loacker': {
+            name: 'Loacker',
+            description: 'Loacker is an Italian confectionery company founded in 1925, famous for its wafer products and premium confections. The family-owned business is known for high-quality ingredients and traditional Alpine recipes.',
+            industry: 'Food & Confectionery',
+            headquarters: 'South Tyrol, Italy',
+            key_products: ['Wafers', 'Chocolate', 'Cookies', 'Pralines'],
+            market_position: 'Premium European confectionery brand'
         }
     };
     
@@ -445,6 +454,82 @@ async function handleMarketAnalysis(query, analysisType = 'sentiment') {
     }
 }
 
+// Enhanced file reading function
+async function readFileContent(filePath, fileType, fileName) {
+    console.log('📖 Reading file:', fileName, 'Type:', fileType);
+    
+    try {
+        let fileContent = '';
+        let processingMethod = '';
+        
+        if (fileType === 'application/pdf') {
+            // Handle PDF files with proper parsing
+            console.log('📄 Processing PDF file...');
+            try {
+                const dataBuffer = fs.readFileSync(filePath);
+                const pdfData = await pdf(dataBuffer);
+                fileContent = pdfData.text.substring(0, 15000); // Limit to 15k chars
+                processingMethod = 'pdf-parsed';
+                console.log('✅ PDF parsed successfully, content length:', fileContent.length);
+            } catch (pdfError) {
+                console.log('❌ PDF parsing failed:', pdfError.message);
+                fileContent = '[PDF file detected but content could not be extracted. This might be a scanned document, encrypted PDF, or contain only images.]';
+                processingMethod = 'pdf-failed';
+            }
+        } else if (fileType && (fileType.startsWith('text/') || 
+                   fileType === 'application/json' ||
+                   fileType === 'application/csv')) {
+            // Handle text-based files
+            console.log('📝 Processing text-based file...');
+            fileContent = fs.readFileSync(filePath, 'utf8').substring(0, 15000);
+            processingMethod = 'text';
+            console.log('✅ Text file read successfully, content length:', fileContent.length);
+        } else if (fileName.endsWith('.txt') || 
+                   fileName.endsWith('.md') || 
+                   fileName.endsWith('.csv') ||
+                   fileName.endsWith('.json') ||
+                   fileName.endsWith('.log')) {
+            // Handle files by extension if MIME type is unclear
+            console.log('📝 Processing file by extension...');
+            try {
+                fileContent = fs.readFileSync(filePath, 'utf8').substring(0, 15000);
+                processingMethod = 'text-by-extension';
+                console.log('✅ File read successfully by extension, content length:', fileContent.length);
+            } catch (extError) {
+                console.log('❌ Could not read file by extension:', extError.message);
+                fileContent = '[File could not be read as text]';
+                processingMethod = 'extension-failed';
+            }
+        } else {
+            // Try to read as text anyway
+            console.log('📊 Attempting to read unknown file type as text...');
+            try {
+                fileContent = fs.readFileSync(filePath, 'utf8').substring(0, 15000);
+                processingMethod = 'text-attempt';
+                console.log('✅ Unknown file read as text, content length:', fileContent.length);
+            } catch (readError) {
+                console.log('❌ Could not read file as text:', readError.message);
+                fileContent = '[Binary or unreadable file - content cannot be displayed as text]';
+                processingMethod = 'binary-file';
+            }
+        }
+        
+        return {
+            content: fileContent,
+            method: processingMethod,
+            success: fileContent.length > 0 && !fileContent.startsWith('[')
+        };
+        
+    } catch (error) {
+        console.error('❌ File reading error:', error.message);
+        return {
+            content: '[Error reading file: ' + error.message + ']',
+            method: 'error',
+            success: false
+        };
+    }
+}
+
 // Helper function for processing with Assistant
 async function processWithAssistant(message, sessionId, session) {
     try {
@@ -556,7 +641,7 @@ async function processWithAssistant(message, sessionId, session) {
     }
 }
 
-// MAIN CHAT ENDPOINT - Enhanced with File Upload Support
+// MAIN CHAT ENDPOINT - Enhanced with Server-Side File Reading
 app.post('/chat', upload.array('files', 10), async (req, res) => {
     try {
         const userMessage = req.body.message || '';
@@ -570,7 +655,7 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
         // Get or create session
         const session = getSession(sessionId);
 
-        // Handle uploaded files with ENHANCED DEBUG
+        // ENHANCED FILE PROCESSING WITH SERVER-SIDE READING
         if (uploadedFiles.length > 0) {
             console.log(`📎 Processing ${uploadedFiles.length} uploaded files`);
             
@@ -595,66 +680,122 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
                                         userMessage.toLowerCase().includes(keyword));
 
             if (shouldAutoAnalyze) {
-                console.log(`🤖 Auto-analyzing uploaded files`);
+                console.log(`🤖 Auto-analyzing uploaded files with SERVER-SIDE reading`);
                 
-                // Create analysis message with ENHANCED DEBUG
                 const fileNames = uploadedFiles.map(f => f.originalname).join(', ');
-                const serverFilename = uploadedFiles[0]?.filename; // Server-generated filename
+                const filePath = uploadedFiles[0]?.path;
+                const fileType = uploadedFiles[0]?.mimetype;
+                const fileName = uploadedFiles[0]?.originalname;
                 
-                const analysisPrompt = `IMPORTANT: Please analyze the uploaded file(s): ${fileNames}. 
+                try {
+                    // Read file content on the server
+                    const fileReadResult = await readFileContent(filePath, fileType, fileName);
+                    
+                    console.log('📊 File reading result:');
+                    console.log('  Method:', fileReadResult.method);
+                    console.log('  Success:', fileReadResult.success);
+                    console.log('  Content length:', fileReadResult.content.length);
+                    console.log('  Content preview:', fileReadResult.content.substring(0, 150) + '...');
+                    
+                    const analysisPrompt = `Please analyze this uploaded document with the actual content provided below.
 
-CRITICAL: Use this exact command: await window.fs.readFile('${serverFilename}', { encoding: 'utf8' })
+**File Information:**
+- **Name:** ${fileNames}
+- **Size:** ${Math.round(uploadedFiles[0]?.size / 1024)} KB
+- **Type:** ${fileType || 'Unknown'}
+- **Processing Method:** ${fileReadResult.method}
 
-The file you must read is: ${serverFilename}
-Original filename: ${fileNames}
+**ACTUAL DOCUMENT CONTENT:**
+${fileReadResult.content}
 
-You MUST read the file content first, then provide analysis.
+Based on the ACTUAL content above (not just the filename), please provide:
 
 ## Document Analysis
+
 **File:** ${fileNames}
-**Type:** [Document type based on actual content]
+**Type:** [Determine from actual content analysis]
 
 ## Summary
-[What the document actually contains based on file content]
+[What this document actually contains based on the real content provided]
 
 ## Key Content
-[Main points from the actual file content you read]
+[Main points, data, sections, or information extracted from the actual content]
 
-## Document Assessment
-[Professional evaluation based on actual content]
+## Document Structure & Quality
+[Assessment of organization, formatting, writing quality based on actual content]
 
-## Recommendations
-[Specific suggestions based on actual content you read]
+## Key Insights & Recommendations
+[Specific observations and actionable suggestions based on what you actually read]
 
-Remember: You HAVE access to the file. Use window.fs.readFile('${serverFilename}', { encoding: 'utf8' }) to read it.`;
+## Content Assessment
+[Professional evaluation of the document's effectiveness, completeness, and purpose]
 
-                console.log('🔍 DEBUG: Sending this prompt to Assistant:');
-                console.log('='.repeat(50));
-                console.log(analysisPrompt);
-                console.log('=' * 50);
-                console.log('📁 Server filename:', serverFilename);
-                console.log('📁 Original filename:', fileNames);
-                console.log('📁 File path:', uploadedFiles[0]?.path);
-                console.log('📁 File size:', uploadedFiles[0]?.size);
-                console.log('📁 File type:', uploadedFiles[0]?.mimetype);
-                
-                // Process with assistant for auto-analysis
-                const response = await processWithAssistant(analysisPrompt, sessionId, session);
-                
-                console.log('📋 RESPONSE RECEIVED:');
-                console.log(response.substring(0, 200) + '...');
-                
-                return res.json({
-                    response: response,
-                    sessionId: sessionId,
-                    filesAnalyzed: uploadedFiles.map(f => f.originalname),
-                    autoAnalyzed: true,
-                    debugInfo: {
-                        serverFilename: serverFilename,
-                        originalName: fileNames,
-                        fileSize: uploadedFiles[0]?.size
-                    }
-                });
+IMPORTANT: Base your entire analysis on the actual document content provided above, not assumptions from the filename.`;
+
+                    console.log('🔍 DEBUG: Sending comprehensive file analysis to Assistant');
+                    console.log('📊 File details - Name:', fileNames, 'Size:', uploadedFiles[0]?.size, 'Type:', fileType);
+                    
+                    // Process with assistant
+                    const response = await processWithAssistant(analysisPrompt, sessionId, session);
+                    
+                    console.log('📋 RESPONSE: File analysis completed successfully');
+                    
+                    return res.json({
+                        response: response,
+                        sessionId: sessionId,
+                        filesAnalyzed: uploadedFiles.map(f => f.originalname),
+                        autoAnalyzed: true,
+                        fileProcessing: {
+                            method: 'server-side-reading',
+                            processingMethod: fileReadResult.method,
+                            contentLength: fileReadResult.content.length,
+                            success: fileReadResult.success
+                        }
+                    });
+                    
+                } catch (fileError) {
+                    console.error('❌ Error during server-side file processing:', fileError.message);
+                    
+                    // Fallback analysis based on filename and metadata
+                    const fallbackPrompt = `The user uploaded a file but I encountered technical difficulties reading the content.
+
+**File Details:**
+- **Name:** ${fileNames}
+- **Size:** ${Math.round(uploadedFiles[0]?.size / 1024)} KB
+- **Type:** ${uploadedFiles[0]?.mimetype || 'Unknown'}
+
+Based on the filename and file type, please provide:
+
+## Document Analysis
+
+**File:** ${fileNames}
+**Type:** [Inferred from filename and extension]
+
+## Expected Content
+[What this type of file typically contains based on name and extension]
+
+## General Recommendations
+[Standard suggestions for this document type]
+
+## Next Steps
+[How to proceed with this file type for better analysis]
+
+Note: For detailed content analysis, the file would need to be in a more accessible format or the technical issue resolved.`;
+                    
+                    const response = await processWithAssistant(fallbackPrompt, sessionId, session);
+                    
+                    return res.json({
+                        response: response,
+                        sessionId: sessionId,
+                        filesAnalyzed: uploadedFiles.map(f => f.originalname),
+                        autoAnalyzed: true,
+                        fileProcessing: {
+                            method: 'fallback-analysis',
+                            error: fileError.message,
+                            success: false
+                        }
+                    });
+                }
             }
         }
 
@@ -666,26 +807,45 @@ Remember: You HAVE access to the file. Use window.fs.readFile('${serverFilename}
 
             if (isFileQuery) {
                 console.log(`📋 File-related query detected for existing files`);
-                const fileNames = session.uploadedFiles.map(f => f.originalName).join(', ');
-                const serverFilename = session.uploadedFiles[0]?.filename;
+                const recentFile = session.uploadedFiles[session.uploadedFiles.length - 1];
                 
-                const enhancedMessage = `${userMessage} 
+                try {
+                    // Read the most recent file
+                    const fileReadResult = await readFileContent(recentFile.path, recentFile.mimetype, recentFile.originalName);
+                    
+                    const enhancedMessage = `${userMessage} 
 
-IMPORTANT: The user is asking about previously uploaded files: ${fileNames}
+The user is asking about a previously uploaded file: ${recentFile.originalName}
 
-Please use window.fs.readFile('${serverFilename}', { encoding: 'utf8' }) to read and analyze the file content to answer their question.
+**File Content:**
+${fileReadResult.content}
 
-Provide a helpful analysis based on the actual file content.`;
-                
-                console.log('🔍 DEBUG: File query prompt:');
-                console.log(enhancedMessage);
-                
-                const response = await processWithAssistant(enhancedMessage, sessionId, session);
-                return res.json({
-                    response: response,
-                    sessionId: sessionId,
-                    filesReferenced: session.uploadedFiles.map(f => f.originalName)
-                });
+Please provide a helpful analysis based on the actual file content above and answer their specific question.`;
+                    
+                    console.log('🔍 DEBUG: Processing file-related query with content');
+                    
+                    const response = await processWithAssistant(enhancedMessage, sessionId, session);
+                    return res.json({
+                        response: response,
+                        sessionId: sessionId,
+                        filesReferenced: [recentFile.originalName]
+                    });
+                    
+                } catch (fileError) {
+                    console.error('❌ Error reading existing file:', fileError.message);
+                    
+                    const fallbackMessage = `${userMessage}
+
+The user is asking about a previously uploaded file: ${recentFile.originalName}, but I cannot access the content currently. Please provide general guidance based on the question and filename.`;
+                    
+                    const response = await processWithAssistant(fallbackMessage, sessionId, session);
+                    return res.json({
+                        response: response,
+                        sessionId: sessionId,
+                        filesReferenced: [recentFile.originalName],
+                        fileAccessError: true
+                    });
+                }
             }
         }
 
@@ -766,10 +926,10 @@ Your comprehensive market intelligence report is ready! Click the download link 
             
             enhancedMessage = `${userMessage}
 
-📎 **Available Files for Analysis:**
+📎 **Available Files for Reference:**
 ${fileContext}
 
-Note: Use window.fs.readFile('${session.uploadedFiles[0]?.filename}', { encoding: 'utf8' }) to read file content if needed for analysis.`;
+Note: Files have been processed and are available for context if relevant to the query.`;
         }
         
         await openai.beta.threads.messages.create(thread.id, {
@@ -1302,7 +1462,7 @@ app.get('/', (req, res) => {
                 <strong>Welcome to InsightEar GPT!</strong><br><br>
                 I'm your intelligent market research assistant. I can help you with:<br><br>
                 📊 <strong>Market Intelligence:</strong> Brand analysis, consumer sentiment, competitive research<br>
-                📁 <strong>File Analysis:</strong> Upload documents for instant analysis and insights<br>
+                📁 <strong>File Analysis:</strong> Upload documents for instant analysis and insights (PDFs, text files, reports)<br>
                 💬 <strong>General Questions:</strong> Business, technology, and educational topics<br><br>
                 Just ask me anything or upload files - I'll automatically search the web when needed!
             </div>
@@ -1413,9 +1573,9 @@ app.get('/', (req, res) => {
                     addMessage(\`✅ Auto-analyzed: \${data.filesAnalyzed.join(', ')}\`, 'system');
                 }
                 
-                // Show debug info if available
-                if (data.debugInfo) {
-                    console.log('Debug Info:', data.debugInfo);
+                // Show processing info if available
+                if (data.fileProcessing) {
+                    console.log('File Processing Info:', data.fileProcessing);
                 }
                 
             } catch (error) {
@@ -1496,7 +1656,8 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('Host: 0.0.0.0');
     console.log('Assistant ID: ' + (process.env.ASSISTANT_ID || 'NOT SET'));
     console.log('OpenAI API Key: ' + (process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'));
-    console.log('Enhanced Features: Auto file analysis, Smart routing, Session persistence');
+    console.log('Enhanced Features: Server-side file reading, Smart routing, Session persistence');
+    console.log('File Support: PDFs, Text files, Documents with content extraction');
     console.log('File Upload: 50MB limit, Auto-analysis enabled');
     console.log('Web Search: Reddit + Google News APIs');
     console.log('Debug endpoints: /debug-assistant, /test-file-read');
@@ -1505,7 +1666,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('=================================');
     console.log('✅ Ready for enhanced market intelligence with file analysis!');
     console.log('🤖 Smart routing: File analysis vs Market research vs General conversation');
-    console.log('📁 Auto file analysis: Upload → Instant analysis');
+    console.log('📁 Server-side file reading: PDFs, text files, documents');
     console.log('💾 Session persistence: Context maintained across messages');
     console.log('🔍 Enhanced debugging: Detailed file processing logs');
 });
