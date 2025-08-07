@@ -9,13 +9,14 @@
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
     "openai": "^4.20.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "pdf-parse": "^1.1.1"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "description": "InsightEar GPT - Real-time Market Intelligence with Conversation Persistence",
-  "keywords": ["market-intelligence", "real-time-data", "web-search", "openai", "business-analytics", "conversation-persistence"],
+  "description": "InsightEar GPT - Real-time Market Intelligence with Enhanced File Analysis",
+  "keywords": ["market-intelligence", "real-time-data", "web-search", "openai", "business-analytics", "file-analysis"],
   "author": "InsightEar",
   "license": "MIT"
 }
