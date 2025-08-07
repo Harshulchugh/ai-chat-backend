@@ -60,7 +60,7 @@ function getSession(sessionId) {
     return session;
 }
 
-// Clean query extraction
+// Clean query extraction with industry support
 function extractCleanQuery(userMessage) {
     const message = userMessage.toLowerCase().trim();
     
@@ -82,19 +82,34 @@ function extractCleanQuery(userMessage) {
     }
     
     if (cleanQuery.length > 0) {
-        cleanQuery = cleanQuery.charAt(0).toUpperCase() + cleanQuery.slice(1);
+        // Handle industry terms vs specific brands
+        const lowerQuery = cleanQuery.toLowerCase();
         
-        // Brand corrections
-        if (cleanQuery.toLowerCase().includes('aldi')) cleanQuery = 'Aldi';
-        if (cleanQuery.toLowerCase().includes('trader joe')) cleanQuery = 'Trader Joe\'s';
-        if (cleanQuery.toLowerCase().includes('walmart')) cleanQuery = 'Walmart';
+        if (lowerQuery === 'grocery chains' || lowerQuery === 'grocery stores') {
+            cleanQuery = 'Grocery Chains';
+        } else if (lowerQuery === 'fast food' || lowerQuery === 'fast food restaurants') {
+            cleanQuery = 'Fast Food Industry';
+        } else if (lowerQuery === 'electric vehicles' || lowerQuery === 'ev industry') {
+            cleanQuery = 'Electric Vehicles';
+        } else if (lowerQuery === 'streaming services' || lowerQuery === 'streaming platforms') {
+            cleanQuery = 'Streaming Services';
+        } else {
+            // Handle specific brand corrections
+            cleanQuery = cleanQuery.charAt(0).toUpperCase() + cleanQuery.slice(1);
+            
+            if (cleanQuery.toLowerCase().includes('aldi')) cleanQuery = 'Aldi';
+            if (cleanQuery.toLowerCase().includes('trader joe')) cleanQuery = 'Trader Joe\'s';
+            if (cleanQuery.toLowerCase().includes('walmart')) cleanQuery = 'Walmart';
+            if (cleanQuery.toLowerCase().includes('nike')) cleanQuery = 'Nike';
+            if (cleanQuery.toLowerCase().includes('tesla')) cleanQuery = 'Tesla';
+        }
     }
     
     console.log('Query extraction: "' + userMessage + '" → "' + cleanQuery + '"');
     return cleanQuery;
 }
 
-// Company background function
+// Company background function with industry support
 function getCompanyBackground(query) {
     const companyInfo = {
         'aldi': {
@@ -114,19 +129,47 @@ function getCompanyBackground(query) {
             description: 'Nike is a multinational corporation that designs, develops, manufactures, and markets athletic footwear, apparel, equipment, and accessories. Founded in 1964.',
             industry: 'Athletic Apparel & Footwear',
             market_position: 'Global market leader in athletic footwear'
+        },
+        'grocery chains': {
+            name: 'Grocery Chain Industry',
+            description: 'The grocery chain industry encompasses major supermarket retailers that operate multiple store locations. Key players include Walmart, Kroger, Costco, Target, and regional chains like Trader Joe\'s and Whole Foods. The industry is characterized by competitive pricing, supply chain efficiency, and evolving consumer preferences toward online grocery shopping.',
+            industry: 'Retail / Grocery / Food Distribution',
+            market_position: 'Multi-trillion dollar industry with intense competition and consolidation trends'
+        },
+        'fast food': {
+            name: 'Fast Food Industry',
+            description: 'The fast food industry consists of quick-service restaurants that provide convenient, affordable meals. Major players include McDonald\'s, Burger King, KFC, Subway, and emerging brands. The industry faces challenges around health consciousness, labor costs, and digital transformation.',
+            industry: 'Food Service / Quick Service Restaurants',
+            market_position: 'Global industry worth hundreds of billions with digital transformation focus'
+        },
+        'electric vehicles': {
+            name: 'Electric Vehicle Industry',
+            description: 'The electric vehicle industry includes manufacturers of battery-powered cars, trucks, and commercial vehicles. Led by Tesla, traditional automakers like Ford, GM, and new entrants like Rivian are rapidly expanding EV offerings as the industry transitions away from combustion engines.',
+            industry: 'Automotive / Clean Energy Transportation',
+            market_position: 'Rapidly growing sector with government support and increasing consumer adoption'
         }
     };
     
     const searchKey = query.toLowerCase().trim();
     
+    // Check for exact matches
     if (companyInfo[searchKey]) {
         return companyInfo[searchKey];
     }
     
+    // Check for partial matches
+    for (const [key, info] of Object.entries(companyInfo)) {
+        if (searchKey.includes(key) || key.includes(searchKey)) {
+            return info;
+        }
+    }
+    
+    // Generic analysis for unknown topics
     return {
         name: query,
-        description: `${query} is a business entity being analyzed for market intelligence and consumer sentiment.`,
-        industry: 'To be determined through analysis'
+        description: `${query} represents a business entity, brand, or market sector being analyzed for comprehensive market intelligence and strategic insights.`,
+        industry: 'Market analysis and business intelligence research',
+        analysis_scope: 'Strategic market positioning and consumer sentiment evaluation'
     };
 }
 
@@ -436,6 +479,14 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
         console.log('Files uploaded: ' + uploadedFiles.length);
 
         const session = getSession(sessionId);
+        
+        // DEBUG: Log session before processing
+        console.log('Session before processing:', {
+            hasQuery: !!session.lastQuery,
+            hasResponse: !!session.lastResponse,
+            queryPreview: session.lastQuery?.substring(0, 50),
+            responseLength: session.lastResponse?.length || 0
+        });
 
         // Handle file uploads
         if (uploadedFiles.length > 0) {
@@ -527,9 +578,20 @@ Your market intelligence report is ready! Click the download link above.`;
         const cleanQuery = extractCleanQuery(userMessage);
         session.lastQuery = cleanQuery;
         
+        console.log('Processing query - Original: "' + userMessage + '"');
+        console.log('Clean query stored: "' + cleanQuery + '"');
+        
         const response = await processWithAssistant(userMessage, sessionId, session);
         
         session.lastResponse = response;
+        
+        // DEBUG: Log session after processing
+        console.log('Session after processing:', {
+            hasQuery: !!session.lastQuery,
+            hasResponse: !!session.lastResponse,
+            queryStored: session.lastQuery,
+            responseLength: session.lastResponse?.length || 0
+        });
         
         return res.json({ 
             response: response,
@@ -545,36 +607,74 @@ Your market intelligence report is ready! Click the download link above.`;
     }
 });
 
-// PDF download endpoint
+// PDF download endpoint with enhanced debugging
 app.get('/download-pdf/:sessionId', (req, res) => {
     const sessionId = req.params.sessionId;
     const session = sessions.get(sessionId);
     
-    if (!session || !session.lastResponse || !session.lastQuery) {
+    console.log('=== PDF DOWNLOAD DEBUG ===');
+    console.log('Session ID requested:', sessionId);
+    console.log('Available sessions:', Array.from(sessions.keys()));
+    console.log('Session exists:', !!session);
+    
+    if (session) {
+        console.log('Session data:', {
+            hasQuery: !!session.lastQuery,
+            hasResponse: !!session.lastResponse,
+            query: session.lastQuery,
+            responseLength: session.lastResponse?.length || 0,
+            responsePreview: session.lastResponse?.substring(0, 200) + '...'
+        });
+    }
+    console.log('=== END DEBUG ===');
+    
+    if (!session) {
         return res.status(404).send(`
 <!DOCTYPE html>
 <html>
-<head><title>Report Not Found</title></head>
+<head><title>Session Not Found</title></head>
 <body style="font-family: Arial; padding: 40px; text-align: center;">
-    <h2>Report Not Found</h2>
-    <p>Please generate an analysis first, then request a PDF.</p>
+    <h2>Session Not Found</h2>
+    <p>Session ID: ${sessionId}</p>
+    <p>Available sessions: ${Array.from(sessions.keys()).join(', ')}</p>
+    <a href="/">Return to InsightEar GPT</a>
+</body>
+</html>`);
+    }
+    
+    if (!session.lastResponse || !session.lastQuery) {
+        return res.status(404).send(`
+<!DOCTYPE html>
+<html>
+<head><title>No Analysis Data</title></head>
+<body style="font-family: Arial; padding: 40px; text-align: center;">
+    <h2>No Analysis Data Found</h2>
+    <p>Query: ${session.lastQuery || 'None'}</p>
+    <p>Response Length: ${session.lastResponse?.length || 0}</p>
+    <p>Please run an analysis first, then request PDF.</p>
     <a href="/">Return to InsightEar GPT</a>
 </body>
 </html>`);
     }
     
     try {
+        console.log('Generating report for: ' + session.lastQuery);
+        console.log('Response data length: ' + session.lastResponse.length);
+        
         const reportContent = generateTemplateReport(session);
         const fileName = `insightear-report-${session.lastQuery.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.pdf`;
+        
+        console.log('Report generated successfully');
+        console.log('Report length: ' + reportContent.length);
+        console.log('Filename: ' + fileName);
         
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(reportContent);
         
-        console.log('Report downloaded: ' + fileName);
-        
     } catch (error) {
-        res.status(500).send('Error generating report: ' + error.message);
+        console.error('Report generation error:', error);
+        res.status(500).send('Error: ' + error.message);
     }
 });
 
