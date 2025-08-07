@@ -1206,13 +1206,53 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
+// Handle graceful shutdown for Railway
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received - performing graceful shutdown');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received - performing graceful shutdown');
+    process.exit(0);
+});
+
+// Keep alive endpoint for Railway health checks
+app.get('/ping', (req, res) => {
+    res.status(200).send('pong');
+});
+
+// Enhanced health endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: '2.0.0 - ALL ISSUES FIXED',
+        sessions_active: sessions.size,
+        assistant_configured: !!process.env.ASSISTANT_ID,
+        openai_configured: !!process.env.OPENAI_API_KEY,
+        uptime: process.uptime(),
+        memory: process.memoryUsage()
+    });
+});
+
+// Start server with Railway optimizations
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('🚀 InsightEar GPT Server Started - ALL ISSUES FIXED');
     console.log('Port: ' + PORT);
     console.log('Assistant ID: ' + (process.env.ASSISTANT_ID || 'NOT SET'));
     console.log('OpenAI Key: ' + (process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'));
     console.log('✅ Ready for market intelligence, file analysis, and professional template reports!');
+    
+    // Keep Railway happy with periodic logging
+    setInterval(() => {
+        console.log('Server alive - Sessions:', sessions.size, '- Memory:', Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB');
+    }, 300000); // Every 5 minutes
+});
+
+// Handle server errors
+server.on('error', (error) => {
+    console.error('Server error:', error);
 });
 
 module.exports = app;
