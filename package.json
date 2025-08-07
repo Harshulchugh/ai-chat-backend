@@ -15,15 +15,13 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "description": "InsightEar GPT - Professional Market Intelligence with Template Reports and Enhanced File Analysis",
+  "description": "InsightEar GPT - Enhanced Market Intelligence with Professional Template Reports",
   "keywords": [
     "market-intelligence", 
     "real-time-data",
-    "professional-reports", 
-    "template-based",
     "file-analysis",
     "reddit-api",
-    "news-api",
+    "news-api", 
     "openai", 
     "business-analytics"
   ],
