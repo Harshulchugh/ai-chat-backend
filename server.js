@@ -680,6 +680,310 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Main chat interface route
+app.get('/', (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InsightEar GPT - Market Intelligence Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .chat-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 800px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        .welcome-message {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 15px;
+            max-width: 80%;
+        }
+        .user-message {
+            background: #3498db;
+            color: white;
+            margin-left: auto;
+        }
+        .assistant-message {
+            background: white;
+            border: 1px solid #e1e8ed;
+        }
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e1e8ed;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .chat-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            resize: none;
+            min-height: 50px;
+            max-height: 100px;
+        }
+        .chat-input:focus {
+            border-color: #3498db;
+        }
+        .send-button {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 15px 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .send-button:hover {
+            transform: scale(1.05);
+        }
+        .file-input {
+            display: none;
+        }
+        .file-button {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="logo">
+                <div class="logo-icon">IE</div>
+                <div style="font-size: 24px; font-weight: bold;">InsightEar GPT</div>
+            </div>
+            <p style="opacity: 0.9;">Market Intelligence Assistant</p>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="welcome-message">
+                <h3 style="color: #2c3e50; margin-bottom: 15px;">Welcome to InsightEar GPT! 🎯</h3>
+                <p style="margin-bottom: 10px;">I'm your intelligent market research assistant. I can help you with:</p>
+                <ul style="margin: 15px 0; padding-left: 20px;">
+                    <li><strong>📊 Market Intelligence:</strong> Brand analysis, consumer sentiment, competitive research</li>
+                    <li><strong>📁 File Analysis:</strong> Upload documents for instant analysis and insights</li>
+                    <li><strong>📋 Professional Reports:</strong> Generate template-formatted PDF reports</li>
+                </ul>
+                <p style="color: #7f8c8d; font-size: 14px;">Just ask me about any brand or upload files - I'll automatically research and provide comprehensive insights!</p>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <div class="input-group">
+                <input type="file" id="fileInput" class="file-input" accept=".pdf,.txt,.doc,.docx">
+                <button type="button" class="file-button" onclick="document.getElementById('fileInput').click()">📎 File</button>
+                <textarea id="messageInput" class="chat-input" placeholder="Ask me about any brand... (e.g., 'analyze Nike consumer sentiment')" rows="1"></textarea>
+                <button id="sendButton" class="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentThreadId = null;
+
+        // Auto-resize textarea
+        const messageInput = document.getElementById('messageInput');
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+
+        // Send message on Enter (but allow Shift+Enter for new lines)
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Send button click
+        document.getElementById('sendButton').addEventListener('click', sendMessage);
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const fileInput = document.getElementById('fileInput');
+            const sendButton = document.getElementById('sendButton');
+            const chatMessages = document.getElementById('chatMessages');
+
+            const message = messageInput.value.trim();
+            const file = fileInput.files[0];
+
+            if (!message && !file) return;
+
+            // Disable input while processing
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.textContent = 'Thinking...';
+
+            // Add user message to chat
+            if (message) {
+                addMessage(message, 'user');
+            }
+            if (file) {
+                addMessage(\`📎 Uploaded: \${file.name}\`, 'user');
+            }
+
+            // Add loading message
+            const loadingDiv = addMessage('🔍 Analyzing and researching...', 'assistant', true);
+
+            try {
+                // Prepare form data
+                const formData = new FormData();
+                formData.append('message', message);
+                if (currentThreadId) {
+                    formData.append('threadId', currentThreadId);
+                }
+                if (file) {
+                    formData.append('file', file);
+                }
+
+                // Send to server
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Remove loading message
+                    chatMessages.removeChild(loadingDiv);
+                    
+                    // Add assistant response
+                    addMessage(data.response, 'assistant');
+                    currentThreadId = data.threadId;
+
+                    // Clear inputs
+                    messageInput.value = '';
+                    fileInput.value = '';
+                } else {
+                    // Remove loading message and show error
+                    chatMessages.removeChild(loadingDiv);
+                    addMessage(\`❌ Error: \${data.error || 'Something went wrong'}\`, 'assistant');
+                }
+            } catch (error) {
+                // Remove loading message and show error
+                chatMessages.removeChild(loadingDiv);
+                addMessage(\`❌ Network error: \${error.message}\`, 'assistant');
+            }
+
+            // Re-enable input
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            sendButton.textContent = 'Send';
+            messageInput.focus();
+        }
+
+        function addMessage(content, sender, isLoading = false) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = \`message \${sender}-message\`;
+            
+            if (isLoading) {
+                messageDiv.className += ' loading';
+            }
+            
+            // Convert markdown-style links to clickable links
+            const formattedContent = content.replace(
+                /\\[([^\\]]+)\\]\\(([^\\)]+)\\)/g, 
+                '<a href="$2" style="color: #3498db; text-decoration: underline;" target="_blank">$1</a>'
+            );
+            
+            messageDiv.innerHTML = formattedContent;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            return messageDiv;
+        }
+
+        // Focus on input when page loads
+        window.addEventListener('load', () => {
+            document.getElementById('messageInput').focus();
+        });
+    </script>
+</body>
+</html>
+  `);
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).send(`
