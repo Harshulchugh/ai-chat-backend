@@ -765,6 +765,11 @@ async function processWithAssistant(message, sessionId, session) {
     }
 }
 
+// Add favicon route to fix 404 error
+app.get('/favicon.ico', (req, res) => {
+    res.status(204).send();
+});
+
 // RAILWAY OPTIMIZATION: Add keep-alive and health monitoring
 app.get('/ping', (req, res) => {
     res.status(200).send('pong');
@@ -1860,6 +1865,10 @@ app.get('/', (req, res) => {
                     body: formData
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
                 const data = await response.json();
                 console.log('Enhanced response received:', {
                     status: response.status,
@@ -1873,7 +1882,7 @@ app.get('/', (req, res) => {
             } catch (error) {
                 console.error('Enhanced request error:', error);
                 chatMessages.removeChild(loadingMsg);
-                addMessage('❌ Connection error: ' + error.message + ' (Please check your connection and try again)', 'assistant');
+                addMessage('❌ Connection error: ' + error.message + '\n\nTroubleshooting:\n• Check your internet connection\n• Try refreshing the page\n• The server may be temporarily unavailable', 'assistant');
             }
 
             sendButton.disabled = false;
@@ -1884,16 +1893,22 @@ app.get('/', (req, res) => {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + sender + '-message';
             
-            if (sender === 'assistant') {
-                // Enhanced markdown processing for professional display
-                content = content
-                    .replace(/## (.*?)(\n|$)/g, '<h3 style="margin: 15px 0 10px 0; color: #4f46e5;">$1</h3>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937;">$1</strong>')
-                    .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" style="color: #4f46e5; text-decoration: none; font-weight: 500;">$1</a>')
-                    .replace(/• /g, '• ')
-                    .replace(/\n/g, '<br>');
-                messageDiv.innerHTML = content;
-            } else {
+            try {
+                if (sender === 'assistant') {
+                    // Enhanced markdown processing for professional display - FIXED REGEX
+                    content = content
+                        .replace(/## (.*?)(\n|$)/g, '<h3 style="margin: 15px 0 10px 0; color: #4f46e5;">$1</h3>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937;">$1</strong>')
+                        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color: #4f46e5; text-decoration: none; font-weight: 500;">$1</a>')
+                        .replace(/• /g, '• ')
+                        .replace(/\n/g, '<br>');
+                    messageDiv.innerHTML = content;
+                } else {
+                    messageDiv.textContent = content;
+                }
+            } catch (regexError) {
+                console.error('Regex processing error:', regexError);
+                // Fallback to simple text display
                 messageDiv.textContent = content;
             }
             
@@ -1902,27 +1917,42 @@ app.get('/', (req, res) => {
             return messageDiv;
         }
 
-        // Enhanced initialization
-        messageInput.focus();
-        console.log('InsightEar GPT Enhanced - All features loaded and ready');
-        
-        // File drag and drop enhancement
-        chatMessages.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            this.style.background = '#f0f9ff';
-        });
-        
-        chatMessages.addEventListener('dragleave', function(e) {
-            e.preventDefault();
-            this.style.background = '#f8fafc';
-        });
-        
-        chatMessages.addEventListener('drop', function(e) {
-            e.preventDefault();
-            this.style.background = '#f8fafc';
-            fileInput.files = e.dataTransfer.files;
-            sendMessage();
-        });
+        // Enhanced initialization with error handling
+        try {
+            messageInput.focus();
+            console.log('InsightEar GPT Enhanced - All features loaded and ready');
+            
+            // File drag and drop enhancement
+            chatMessages.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.style.background = '#f0f9ff';
+            });
+            
+            chatMessages.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.style.background = '#f8fafc';
+            });
+            
+            chatMessages.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.style.background = '#f8fafc';
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    sendMessage();
+                }
+            });
+            
+            // Add global error handler for JavaScript errors
+            window.addEventListener('error', function(event) {
+                console.error('JavaScript error caught:', event.error);
+                console.log('InsightEar GPT will continue working despite this error');
+            });
+            
+        } catch (initError) {
+            console.error('Initialization error:', initError);
+            console.log('Using fallback initialization...');
+            messageInput.focus();
+        }
     </script>
 </body>
 </html>`);
