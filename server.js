@@ -116,13 +116,13 @@ function getCompanyBackground(query) {
             key_products: ['Private-label groceries', 'Unique food products', 'Wine selection'],
             market_position: 'Cult-favorite grocery chain with strong customer loyalty'
         },
-        'zs associates': {
-            name: 'ZS Associates',
-            description: 'ZS Associates is a global management consulting firm specializing in pharmaceutical, biotechnology, and healthcare industries. Founded in 1983, the company provides strategic consulting, data analytics, and technology solutions to help life sciences companies optimize their commercial operations.',
-            industry: 'Management Consulting / Healthcare',
-            headquarters: 'Evanston, Illinois, USA',
-            key_services: ['Commercial Strategy', 'Data & Analytics', 'Digital Solutions', 'Organizational Development'],
-            notable_clients: 'Fortune 500 pharmaceutical and biotech companies'
+        'walmart': {
+            name: 'Walmart Inc.',
+            description: 'Walmart is an American multinational retail corporation that operates a chain of hypermarkets, discount department stores, and grocery stores. Founded in 1962, it is the world\'s largest company by revenue and the largest private employer globally.',
+            industry: 'Retail / Big Box',
+            headquarters: 'Bentonville, Arkansas, USA',
+            key_products: ['General merchandise', 'Groceries', 'Pharmacy', 'Financial services'],
+            market_position: 'World\'s largest retailer with dominant market presence'
         },
         'nike': {
             name: 'Nike Inc.',
@@ -139,38 +139,6 @@ function getCompanyBackground(query) {
             headquarters: 'Austin, Texas, USA',
             key_products: ['Model S', 'Model 3', 'Model X', 'Model Y', 'Cybertruck', 'Energy Storage'],
             market_position: 'Leading electric vehicle manufacturer globally'
-        },
-        'kirkland': {
-            name: 'Kirkland Signature',
-            description: 'Kirkland Signature is Costco\'s private label brand, offering a wide range of high-quality products at competitive prices across groceries, household items, and personal care categories.',
-            industry: 'Private Label Retail',
-            headquarters: 'Issaquah, Washington, USA',
-            key_products: ['Groceries', 'Household items', 'Personal care', 'Electronics'],
-            market_position: 'Leading private label brand in warehouse retail'
-        },
-        'hasbro': {
-            name: 'Hasbro Inc.',
-            description: 'Hasbro is a multinational toy and board game company headquartered in Pawtucket, Rhode Island. Founded in 1923, it is one of the largest toy makers in the world, known for brands like Transformers, My Little Pony, Monopoly, and G.I. Joe.',
-            industry: 'Toys and Entertainment',
-            headquarters: 'Pawtucket, Rhode Island, USA',
-            key_products: ['Action figures', 'Board games', 'Dolls', 'Electronic games'],
-            market_position: 'Leading global toy and entertainment company'
-        },
-        'loacker': {
-            name: 'Loacker',
-            description: 'Loacker is an Italian confectionery company founded in 1925, famous for its wafer products and premium confections. The family-owned business is known for high-quality ingredients and traditional Alpine recipes.',
-            industry: 'Food & Confectionery',
-            headquarters: 'South Tyrol, Italy',
-            key_products: ['Wafers', 'Chocolate', 'Cookies', 'Pralines'],
-            market_position: 'Premium European confectionery brand'
-        },
-        'walmart': {
-            name: 'Walmart Inc.',
-            description: 'Walmart is an American multinational retail corporation that operates a chain of hypermarkets, discount department stores, and grocery stores. Founded in 1962, it is the world\'s largest company by revenue and the largest private employer globally.',
-            industry: 'Retail / Big Box',
-            headquarters: 'Bentonville, Arkansas, USA',
-            key_products: ['General merchandise', 'Groceries', 'Pharmacy', 'Financial services'],
-            market_position: 'World\'s largest retailer with dominant market presence'
         },
         'vapes': {
             name: 'Vaping Products',
@@ -205,15 +173,7 @@ function getCompanyBackground(query) {
 }
 
 async function handleCompanyBackgroundSearch(query) {
-    console.log('   /test-file-read - File system access test');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('🎯 Ready for professional market intelligence with template PDFs!');
-    console.log('📊 All your advanced features: File analysis, Real APIs, Template reports');
-    console.log('🔥 Professional InsightEar branding with CSS logo generation');
-    console.log('💼 Executive-ready reports matching your template format');
-});
-
-module.exports = app;('🏢 Getting company background for: "' + query + '"');
+    console.log('🏢 Getting company background for: "' + query + '"');
     
     const background = getCompanyBackground(query);
     
@@ -1527,7 +1487,6 @@ app.get('/download-pdf/:sessionId', (req, res) => {
         <h2 style="color: #e74c3c;">Session Not Found</h2>
         <p>The requested report session could not be found.</p>
         <p><strong>Session ID:</strong> ${sessionId}</p>
-        <p><strong>Available Sessions:</strong> ${Array.from(sessions.keys()).slice(0, 3).join(', ')}${Array.from(sessions.keys()).length > 3 ? '...' : ''}</p>
         <p><a href="/" style="color: #4f46e5; text-decoration: none; background: #f3f4f6; padding: 10px 20px; border-radius: 5px;">Return to InsightEar GPT</a></p>
     </div>
 </body>
@@ -2220,4 +2179,12 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('   /debug-assistant - OpenAI Assistant details');
     console.log('   /test-function/[query] - Test all functions directly');
     console.log('   /debug-session/[sessionId] - Session data inspection');
-    console.log
+    console.log('   /test-file-read - File system access test');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('🎯 Ready for professional market intelligence with template PDFs!');
+    console.log('📊 All your advanced features: File analysis, Real APIs, Template reports');
+    console.log('🔥 Professional InsightEar branding with CSS logo generation');
+    console.log('💼 Executive-ready reports matching your template format');
+});
+
+module.exports = app;
