@@ -629,7 +629,7 @@ You MUST read the file content first, then provide analysis.
 Remember: You HAVE access to the file. Use window.fs.readFile('${serverFilename}', { encoding: 'utf8' }) to read it.`;
 
                 console.log('🔍 DEBUG: Sending this prompt to Assistant:');
-                console.log('=' * 50);
+                console.log('='.repeat(50));
                 console.log(analysisPrompt);
                 console.log('=' * 50);
                 console.log('📁 Server filename:', serverFilename);
