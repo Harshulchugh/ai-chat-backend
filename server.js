@@ -580,42 +580,50 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
                                     userMessage.trim().length === 0 || 
                                     ['analyze', 'what is this', 'summary', 'review', 'what is', 'summarize'].some(keyword => 
                                         userMessage.toLowerCase().includes(keyword));
+if (shouldAutoAnalyze) {
+    console.log(`🤖 Auto-analyzing uploaded files`);
+    
+    // Create analysis message for assistant
+    const fileNames = uploadedFiles.map(f => f.originalname).join(', ');
+    const serverFilename = uploadedFiles[0]?.filename; // Server-generated filename
+    
+    const analysisPrompt = `IMPORTANT: Please analyze the uploaded file(s): ${fileNames}. 
 
-            if (shouldAutoAnalyze) {
-                console.log(`🤖 Auto-analyzing uploaded files`);
-                
-                // Create analysis message for assistant
-                const fileNames = uploadedFiles.map(f => f.originalname).join(', ');
-                const analysisPrompt = `IMPORTANT: Please analyze the uploaded file(s): ${fileNames}. 
+CRITICAL: Use this exact command: await window.fs.readFile('${serverFilename}', { encoding: 'utf8' })
 
-The user has uploaded these files and wants analysis. Please read the file content using window.fs.readFile('${uploadedFiles[0]?.filename}', { encoding: 'utf8' }) and provide a comprehensive analysis including:
+The file you must read is: ${serverFilename}
+Original filename: ${fileNames}
+
+You MUST read the file content first, then provide analysis.
 
 ## Document Analysis
 **File:** ${fileNames}
-**Type:** [Document type]
+**Type:** [Document type based on actual content]
 
 ## Summary
-[What the document is and its purpose]
+[What the document actually contains]
 
 ## Key Content
-[Main points and information]
+[Main points from the actual file content]
 
-## Observations & Recommendations
-[Professional insights and suggestions]
+## Recommendations
+[Based on actual content you read]`;
 
-Use the file reading capabilities to analyze the actual content.`;
-                
-                // Process with assistant for auto-analysis
-                const response = await processWithAssistant(analysisPrompt, sessionId, session);
-                
-                return res.json({
-                    response: response,
-                    sessionId: sessionId,
-                    filesAnalyzed: uploadedFiles.map(f => f.originalname),
-                    autoAnalyzed: true
-                });
-            }
-        }
+    console.log('🔍 DEBUG: Sending this prompt to Assistant:');
+    console.log(analysisPrompt);
+    console.log('📁 Server filename:', serverFilename);
+    console.log('📁 Original filename:', fileNames);
+    
+    // Process with assistant for auto-analysis
+    const response = await processWithAssistant(analysisPrompt, sessionId, session);
+    
+    return res.json({
+        response: response,
+        sessionId: sessionId,
+        filesAnalyzed: uploadedFiles.map(f => f.originalname),
+        autoAnalyzed: true
+    });
+}
 
         // Handle file-related queries for existing files
         if (userMessage && session.uploadedFiles.length > 0) {
