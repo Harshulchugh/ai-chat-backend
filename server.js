@@ -295,18 +295,25 @@ Version: Working Template 2.0
     res.send(reportContent);
 });
 
-// Health check
+// RAILWAY OPTIMIZATION: Add keep-alive and health monitoring
+app.get('/ping', (req, res) => {
+    res.status(200).send('pong');
+});
+
+// Railway health check endpoint
 app.get('/health', (req, res) => {
-    res.json({
+    res.status(200).json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: 'Clean Working Version',
-        sessions_active: sessions.size
+        version: 'Railway Optimized',
+        sessions_active: sessions.size,
+        uptime_seconds: process.uptime(),
+        memory_mb: Math.round(process.memoryUsage().rss / 1024 / 1024)
     });
 });
 
-// Debug endpoint
-app.get('/debug', (req, res) => {
+// Keep Railway happy - respond to root quickly
+app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
 <html>
 <head><title>InsightEar Debug</title></head>
@@ -379,8 +386,8 @@ app.get('/debug', (req, res) => {
 </html>`);
 });
 
-// Main page
-app.get('/', (req, res) => {
+// Debug endpoint
+app.get('/debug', (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -626,41 +633,71 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Handle graceful shutdown for Railway
+// Handle graceful shutdown for Railway - Enhanced
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received - performing graceful shutdown');
+    console.log('SIGTERM received - Railway is requesting shutdown');
+    console.log('Uptime was:', process.uptime(), 'seconds');
+    console.log('Sessions active:', sessions.size);
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('SIGINT received - performing graceful shutdown');
+    console.log('SIGINT received - Manual shutdown requested');
     process.exit(0);
 });
 
-// Start server - SESSIONS IS NOW GUARANTEED TO EXIST
+// Railway-specific error handling
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    console.log('Server will continue running...');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    console.log('Server will continue running...');
+});
+
+// Start server with Railway optimizations
 const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log('🚀 InsightEar GPT Server Started - SESSIONS ERROR FIXED');
+    console.log('🚀 InsightEar GPT Server Started - RAILWAY OPTIMIZED');
     console.log('Port: ' + PORT);
+    console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
+    console.log('Railway App: ' + (process.env.RAILWAY_STATIC_URL || 'local'));
     console.log('Assistant ID: ' + (process.env.ASSISTANT_ID || 'NOT SET'));
     console.log('OpenAI Key: ' + (process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'));
     console.log('Sessions Map Initialized: ' + (sessions instanceof Map ? 'YES' : 'NO'));
-    console.log('✅ Ready for market intelligence, file analysis, and professional template reports!');
+    console.log('✅ Ready for market intelligence and chat processing!');
     
-    // SAFE logging with sessions check
+    // Railway keep-alive heartbeat - more frequent logging
     setInterval(() => {
         try {
             const sessionCount = sessions ? sessions.size : 0;
             const memoryMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
-            console.log('Server alive - Sessions:', sessionCount, '- Memory:', memoryMB + 'MB');
+            const uptimeMinutes = Math.round(process.uptime() / 60);
+            console.log(`💓 Railway Heartbeat - Uptime: ${uptimeMinutes}m - Sessions: ${sessionCount} - Memory: ${memoryMB}MB`);
         } catch (error) {
-            console.log('Server alive - Sessions check failed:', error.message);
+            console.log('💓 Railway Heartbeat - Error:', error.message);
         }
-    }, 300000); // Every 5 minutes
+    }, 120000); // Every 2 minutes instead of 5
 });
 
-// Handle server errors
+// Handle server errors gracefully
 server.on('error', (error) => {
-    console.error('Server error:', error);
+    console.error('Server error occurred:', error);
+    if (error.code === 'EADDRINUSE') {
+        console.log('Port already in use, Railway will handle this...');
+    }
 });
+
+// Keep server responsive - Railway optimization
+server.timeout = 30000; // 30 second timeout
+server.keepAliveTimeout = 61000; // Keep alive for Railway
+server.headersTimeout = 62000; // Headers timeout
+
+// Prevent Railway from thinking app is idle
+setInterval(() => {
+    // Internal ping to keep app active
+    console.log('🔄 Internal keep-alive ping');
+}, 240000); // Every 4 minutes
 
 module.exports = app;
