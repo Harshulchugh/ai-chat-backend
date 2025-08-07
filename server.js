@@ -5,7 +5,7 @@ const cors = require('cors');
 const https = require('https');
 const path = require('path');
 const fs = require('fs');
-const pdf = require('pdf-parse'); // For reading PDF files
+const pdf = require('pdf-parse'); // For reading PDF files only
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -1059,10 +1059,10 @@ The user is asking about a previously uploaded file: ${recentFile.originalName},
         );
         
         if (isPdfRequest) {
-            console.log('📄 PDF request detected');
+            console.log('📄 Report request detected');
             
             if (session.lastResponse && session.lastQuery) {
-                console.log('✅ Found previous analysis for PDF: ' + session.lastQuery);
+                console.log('✅ Found previous analysis for report: ' + session.lastQuery);
                 
                 const pdfResponse = `✅ **Report Generated Successfully!**
 
@@ -1173,7 +1173,7 @@ Note: Files have been processed and are available for context if relevant to the
                 
                 // Store response for PDF generation
                 session.lastResponse = responseText;
-                console.log('💾 Stored for PDF: Query="' + session.lastQuery + '", Response length=' + responseText.length);
+                console.log('💾 Stored for report: Query="' + session.lastQuery + '", Response length=' + responseText.length);
                 
                 // ENHANCED FORMATTING: Fix markdown and structure
                 responseText = responseText
@@ -1292,12 +1292,12 @@ app.post('/upload', upload.array('files'), (req, res) => {
     });
 });
 
-// GUARANTEED WORKING PDF DOWNLOAD ENDPOINT - NO DEPENDENCIES
+// GUARANTEED WORKING REPORT DOWNLOAD ENDPOINT - NO DEPENDENCIES
 app.get('/download-pdf/:sessionId', (req, res) => {
     const sessionId = req.params.sessionId;
     const session = sessions.get(sessionId);
     
-    console.log('📄 PDF download request for session:', sessionId);
+    console.log('📄 Report download request for session:', sessionId);
     console.log('📊 Available sessions:', Array.from(sessions.keys()));
     
     if (!session) {
@@ -1426,7 +1426,7 @@ END OF REPORT`;
         const cleanFileName = session.lastQuery.replace(/[^a-z0-9]/gi, '-').toLowerCase();
         const fileName = `insightear-report-${cleanFileName}.txt`;
         
-        // Set headers for download as PDF-like file
+        // Set headers for download
         res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Length', Buffer.byteLength(fullReport, 'utf8'));
@@ -2031,6 +2031,6 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('💾 Session persistence: Context maintained across messages');
     console.log('🔍 Enhanced debugging: Detailed file processing logs');
     console.log('📊 ALL FIXES APPLIED: Query extraction, sentiment math, content filtering');
-    console.log('📄 GUARANTEED working report downloads - No problematic dependencies');
-    console.log('🚀 Railway deployment optimized - Removed PDFKit dependency issues');
+    console.log('📄 GUARANTEED working report downloads - NO problematic dependencies');
+    console.log('🚀 Railway deployment optimized - Completely removed PDFKit');
 });
