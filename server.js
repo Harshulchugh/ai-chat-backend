@@ -98,6 +98,14 @@ function getCompanyBackground(query) {
             headquarters: 'Issaquah, Washington, USA',
             key_products: ['Groceries', 'Household items', 'Personal care', 'Electronics'],
             market_position: 'Leading private label brand in warehouse retail'
+        },
+        'hasbro': {
+            name: 'Hasbro Inc.',
+            description: 'Hasbro is a multinational toy and board game company headquartered in Pawtucket, Rhode Island. Founded in 1923, it is one of the largest toy makers in the world, known for brands like Transformers, My Little Pony, Monopoly, and G.I. Joe.',
+            industry: 'Toys and Entertainment',
+            headquarters: 'Pawtucket, Rhode Island, USA',
+            key_products: ['Action figures', 'Board games', 'Dolls', 'Electronic games'],
+            market_position: 'Leading global toy and entertainment company'
         }
     };
     
@@ -473,12 +481,17 @@ async function processWithAssistant(message, sessionId, session) {
                 if (assistantMessage && assistantMessage.content[0]) {
                     const response = assistantMessage.content[0].text.value;
                     session.lastResponse = response;
+                    console.log('✅ Assistant response received, length: ' + response.length);
                     return response;
                 }
                 break;
             }
 
             if (runStatus.status === 'failed' || runStatus.status === 'cancelled') {
+                console.error('❌ Assistant run failed with status: ' + runStatus.status);
+                if (runStatus.last_error) {
+                    console.error('❌ Last error:', runStatus.last_error);
+                }
                 throw new Error(`Assistant run failed: ${runStatus.status}`);
             }
 
@@ -539,7 +552,7 @@ async function processWithAssistant(message, sessionId, session) {
 
     } catch (error) {
         console.error('❌ Assistant processing error:', error);
-        return "I'm experiencing technical difficulties. Please try again in a moment.";
+        return "I'm experiencing technical difficulties. Please try again in a moment. Debug info: " + error.message;
     }
 }
 
@@ -557,7 +570,7 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
         // Get or create session
         const session = getSession(sessionId);
 
-        // Handle uploaded files
+        // Handle uploaded files with ENHANCED DEBUG
         if (uploadedFiles.length > 0) {
             console.log(`📎 Processing ${uploadedFiles.length} uploaded files`);
             
@@ -580,14 +593,15 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
                                     userMessage.trim().length === 0 || 
                                     ['analyze', 'what is this', 'summary', 'review', 'what is', 'summarize'].some(keyword => 
                                         userMessage.toLowerCase().includes(keyword));
-if (shouldAutoAnalyze) {
-    console.log(`🤖 Auto-analyzing uploaded files`);
-    
-    // Create analysis message for assistant
-    const fileNames = uploadedFiles.map(f => f.originalname).join(', ');
-    const serverFilename = uploadedFiles[0]?.filename; // Server-generated filename
-    
-    const analysisPrompt = `IMPORTANT: Please analyze the uploaded file(s): ${fileNames}. 
+
+            if (shouldAutoAnalyze) {
+                console.log(`🤖 Auto-analyzing uploaded files`);
+                
+                // Create analysis message with ENHANCED DEBUG
+                const fileNames = uploadedFiles.map(f => f.originalname).join(', ');
+                const serverFilename = uploadedFiles[0]?.filename; // Server-generated filename
+                
+                const analysisPrompt = `IMPORTANT: Please analyze the uploaded file(s): ${fileNames}. 
 
 CRITICAL: Use this exact command: await window.fs.readFile('${serverFilename}', { encoding: 'utf8' })
 
@@ -601,29 +615,48 @@ You MUST read the file content first, then provide analysis.
 **Type:** [Document type based on actual content]
 
 ## Summary
-[What the document actually contains]
+[What the document actually contains based on file content]
 
 ## Key Content
-[Main points from the actual file content]
+[Main points from the actual file content you read]
+
+## Document Assessment
+[Professional evaluation based on actual content]
 
 ## Recommendations
-[Based on actual content you read]`;
+[Specific suggestions based on actual content you read]
 
-    console.log('🔍 DEBUG: Sending this prompt to Assistant:');
-    console.log(analysisPrompt);
-    console.log('📁 Server filename:', serverFilename);
-    console.log('📁 Original filename:', fileNames);
-    
-    // Process with assistant for auto-analysis
-    const response = await processWithAssistant(analysisPrompt, sessionId, session);
-    
-    return res.json({
-        response: response,
-        sessionId: sessionId,
-        filesAnalyzed: uploadedFiles.map(f => f.originalname),
-        autoAnalyzed: true
-    });
-}
+Remember: You HAVE access to the file. Use window.fs.readFile('${serverFilename}', { encoding: 'utf8' }) to read it.`;
+
+                console.log('🔍 DEBUG: Sending this prompt to Assistant:');
+                console.log('=' * 50);
+                console.log(analysisPrompt);
+                console.log('=' * 50);
+                console.log('📁 Server filename:', serverFilename);
+                console.log('📁 Original filename:', fileNames);
+                console.log('📁 File path:', uploadedFiles[0]?.path);
+                console.log('📁 File size:', uploadedFiles[0]?.size);
+                console.log('📁 File type:', uploadedFiles[0]?.mimetype);
+                
+                // Process with assistant for auto-analysis
+                const response = await processWithAssistant(analysisPrompt, sessionId, session);
+                
+                console.log('📋 RESPONSE RECEIVED:');
+                console.log(response.substring(0, 200) + '...');
+                
+                return res.json({
+                    response: response,
+                    sessionId: sessionId,
+                    filesAnalyzed: uploadedFiles.map(f => f.originalname),
+                    autoAnalyzed: true,
+                    debugInfo: {
+                        serverFilename: serverFilename,
+                        originalName: fileNames,
+                        fileSize: uploadedFiles[0]?.size
+                    }
+                });
+            }
+        }
 
         // Handle file-related queries for existing files
         if (userMessage && session.uploadedFiles.length > 0) {
@@ -634,13 +667,18 @@ You MUST read the file content first, then provide analysis.
             if (isFileQuery) {
                 console.log(`📋 File-related query detected for existing files`);
                 const fileNames = session.uploadedFiles.map(f => f.originalName).join(', ');
+                const serverFilename = session.uploadedFiles[0]?.filename;
+                
                 const enhancedMessage = `${userMessage} 
 
 IMPORTANT: The user is asking about previously uploaded files: ${fileNames}
 
-Please use window.fs.readFile('${session.uploadedFiles[0]?.filename}', { encoding: 'utf8' }) to read and analyze the file content to answer their question.
+Please use window.fs.readFile('${serverFilename}', { encoding: 'utf8' }) to read and analyze the file content to answer their question.
 
 Provide a helpful analysis based on the actual file content.`;
+                
+                console.log('🔍 DEBUG: File query prompt:');
+                console.log(enhancedMessage);
                 
                 const response = await processWithAssistant(enhancedMessage, sessionId, session);
                 return res.json({
@@ -844,6 +882,9 @@ Note: Use window.fs.readFile('${session.uploadedFiles[0]?.filename}', { encoding
             
             if (currentRun.status === 'failed' || currentRun.status === 'cancelled' || currentRun.status === 'expired') {
                 console.error('❌ Run failed with status: ' + currentRun.status);
+                if (currentRun.last_error) {
+                    console.error('❌ Run error details:', currentRun.last_error);
+                }
                 throw new Error('Assistant run ' + currentRun.status + ': ' + (currentRun.last_error?.message || 'Unknown error'));
             }
             
@@ -942,6 +983,28 @@ app.get('/test-function/:query', async (req, res) => {
             query: query,
             error: error.message,
             timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// File debug endpoint
+app.get('/test-file-read', (req, res) => {
+    try {
+        const uploadsDir = './uploads';
+        const files = fs.readdirSync(uploadsDir);
+        console.log('📁 Files in uploads directory:', files);
+        
+        res.json({
+            status: 'success',
+            uploadedFiles: files,
+            message: 'File listing successful',
+            totalFiles: files.length
+        });
+    } catch (error) {
+        res.json({
+            status: 'error',
+            error: error.message,
+            message: 'Cannot access uploads directory'
         });
     }
 });
@@ -1350,6 +1413,11 @@ app.get('/', (req, res) => {
                     addMessage(\`✅ Auto-analyzed: \${data.filesAnalyzed.join(', ')}\`, 'system');
                 }
                 
+                // Show debug info if available
+                if (data.debugInfo) {
+                    console.log('Debug Info:', data.debugInfo);
+                }
+                
             } catch (error) {
                 chatMessages.removeChild(typingDiv);
                 addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
@@ -1431,7 +1499,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('Enhanced Features: Auto file analysis, Smart routing, Session persistence');
     console.log('File Upload: 50MB limit, Auto-analysis enabled');
     console.log('Web Search: Reddit + Google News APIs');
-    console.log('Debug endpoint: /debug-assistant');
+    console.log('Debug endpoints: /debug-assistant, /test-file-read');
     console.log('Function test: /test-function/[query]');
     console.log('Health check: /health');
     console.log('=================================');
@@ -1439,4 +1507,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('🤖 Smart routing: File analysis vs Market research vs General conversation');
     console.log('📁 Auto file analysis: Upload → Instant analysis');
     console.log('💾 Session persistence: Context maintained across messages');
+    console.log('🔍 Enhanced debugging: Detailed file processing logs');
 });
