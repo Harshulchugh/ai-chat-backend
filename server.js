@@ -44,8 +44,25 @@ const upload = multer({
     limits: { fileSize: 50 * 1024 * 1024 }
 });
 
-// Session storage
-const sessions = new Map();
+// Simple test endpoints for debugging (add right after middleware)
+app.get('/test', (req, res) => {
+    console.log('Test endpoint hit');
+    res.json({
+        message: 'Server is working!',
+        timestamp: new Date().toISOString(),
+        server: 'InsightEar GPT'
+    });
+});
+
+app.post('/simple-test', (req, res) => {
+    console.log('Simple test POST hit');
+    console.log('Body:', req.body);
+    res.json({
+        success: true,
+        received: req.body,
+        message: 'POST request successful!'
+    });
+});
 
 function getSession(sessionId) {
     if (!sessions.has(sessionId)) {
@@ -934,68 +951,6 @@ app.post('/test-chat', (req, res) => {
         timestamp: new Date().toISOString(),
         serverWorking: true
     });
-});
-
-// Debug endpoint for frontend testing
-app.get('/debug-frontend', (req, res) => {
-    res.send(`<!DOCTYPE html>
-<html>
-<head><title>InsightEar Debug</title></head>
-<body style="font-family: Arial; padding: 20px;">
-    <h2>InsightEar Frontend Debug</h2>
-    <div id="results"></div>
-    <button onclick="testBasicChat()">Test Basic Chat</button>
-    <button onclick="testMainChat()">Test Main Chat</button>
-    
-    <script>
-        async function testBasicChat() {
-            const results = document.getElementById('results');
-            results.innerHTML = '<p>Testing basic chat...</p>';
-            
-            try {
-                const response = await fetch('/test-chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Session-ID': 'debug-session-123'
-                    },
-                    body: JSON.stringify({ message: 'debug test message' })
-                });
-                
-                const data = await response.json();
-                results.innerHTML = '<h3>✅ Basic Test Result:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                
-            } catch (error) {
-                results.innerHTML = '<h3>❌ Basic Test Failed:</h3><p>' + error.message + '</p>';
-            }
-        }
-        
-        async function testMainChat() {
-            const results = document.getElementById('results');
-            results.innerHTML = '<p>Testing main chat endpoint...</p>';
-            
-            try {
-                const formData = new FormData();
-                formData.append('message', 'hi');
-                
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'X-Session-ID': 'debug-session-456'
-                    },
-                    body: formData
-                });
-                
-                const data = await response.json();
-                results.innerHTML = '<h3>✅ Main Chat Result:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                
-            } catch (error) {
-                results.innerHTML = '<h3>❌ Main Chat Failed:</h3><p>' + error.message + '</p>';
-            }
-        }
-    </script>
-</body>
-</html>`);
 });
     const allSessions = {};
     for (const [id, session] of sessions.entries()) {
