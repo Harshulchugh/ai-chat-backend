@@ -1,5 +1,5 @@
 {
-  "name": "insightear-gpt-enhanced",
+  "name": "insightear-gpt-clean",
   "version": "2.0.0",
   "main": "server.js",
   "scripts": {
@@ -14,17 +14,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "description": "InsightEar GPT - Enhanced Market Intelligence with Professional Template Reports",
-  "keywords": [
-    "market-intelligence", 
-    "real-time-data",
-    "file-analysis",
-    "reddit-api",
-    "news-api", 
-    "openai", 
-    "business-analytics"
-  ],
-  "author": "InsightEar",
-  "license": "MIT"
+  }
 }
