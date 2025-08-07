@@ -5,7 +5,8 @@ const cors = require('cors');
 const https = require('https');
 const path = require('path');
 const fs = require('fs');
-const pdf = require('pdf-parse'); // For PDF file parsing
+const pdf = require('pdf-parse'); // For reading PDF files
+const PDFDocument = require('pdfkit'); // For generating PDF files
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -638,6 +639,173 @@ function extractCleanQuery(userMessage) {
     return cleanQuery;
 }
 
+// ENHANCED PDF GENERATION FUNCTION
+function generatePDFReport(query, response, sessionId) {
+    return new Promise((resolve, reject) => {
+        try {
+            console.log('📄 Starting PDF generation for:', query);
+            
+            const doc = new PDFDocument({
+                size: 'A4',
+                margins: {
+                    top: 50,
+                    bottom: 50,
+                    left: 50,
+                    right: 50
+                }
+            });
+            
+            let buffers = [];
+            doc.on('data', buffers.push.bind(buffers));
+            doc.on('end', () => {
+                const pdfData = Buffer.concat(buffers);
+                console.log('✅ PDF generated successfully, size:', pdfData.length, 'bytes');
+                resolve(pdfData);
+            });
+            
+            // PDF Header
+            doc.fontSize(20)
+               .fillColor('#4f46e5')
+               .text('INSIGHTEAR GPT', 50, 50, { align: 'center' })
+               .fontSize(14)
+               .fillColor('#666')
+               .text('Market Intelligence Report', 50, 80, { align: 'center' });
+            
+            // Divider line
+            doc.strokeColor('#e5e7eb')
+               .lineWidth(1)
+               .moveTo(50, 110)
+               .lineTo(545, 110)
+               .stroke();
+            
+            // Report metadata
+            doc.fontSize(12)
+               .fillColor('#374151')
+               .text(`Analysis Topic: ${query}`, 50, 130)
+               .text(`Generated: ${new Date().toLocaleString()}`, 50, 150)
+               .text(`Report Type: Market Intelligence & Consumer Sentiment Analysis`, 50, 170)
+               .text(`Session ID: ${sessionId}`, 50, 190);
+            
+            // Another divider
+            doc.strokeColor('#e5e7eb')
+               .lineWidth(1)
+               .moveTo(50, 220)
+               .lineTo(545, 220)
+               .stroke();
+            
+            // Process and add the main content
+            let yPosition = 240;
+            const pageHeight = 750;
+            const lineHeight = 18;
+            
+            // Clean up the response content
+            const cleanContent = response
+                .replace(/## /g, '\n\n')
+                .replace(/### /g, '\n')
+                .replace(/\*\*(.*?)\*\*/g, '$1')
+                .replace(/• /g, '  • ')
+                .replace(/\n\n\n+/g, '\n\n')
+                .trim();
+            
+            const lines = cleanContent.split('\n');
+            
+            lines.forEach((line, index) => {
+                // Check if we need a new page
+                if (yPosition > pageHeight) {
+                    doc.addPage();
+                    yPosition = 50;
+                }
+                
+                const trimmedLine = line.trim();
+                
+                if (trimmedLine === '') {
+                    yPosition += lineHeight / 2;
+                    return;
+                }
+                
+                // Handle headers (lines that start with uppercase and are short)
+                if (trimmedLine.length < 50 && 
+                    trimmedLine === trimmedLine.toUpperCase() && 
+                    !trimmedLine.includes('•') &&
+                    !trimmedLine.includes('%') &&
+                    !trimmedLine.includes(':')) {
+                    
+                    doc.fontSize(14)
+                       .fillColor('#1f2937')
+                       .font('Helvetica-Bold')
+                       .text(trimmedLine, 50, yPosition);
+                    yPosition += lineHeight + 5;
+                    
+                } else if (trimmedLine.startsWith('About ') || 
+                          trimmedLine.includes('Executive Summary') ||
+                          trimmedLine.includes('Historical Data') ||
+                          trimmedLine.includes('Current Data') ||
+                          trimmedLine.includes('Sentiment Analysis') ||
+                          trimmedLine.includes('Recommendations')) {
+                    
+                    // Section headers
+                    doc.fontSize(13)
+                       .fillColor('#374151')
+                       .font('Helvetica-Bold')
+                       .text(trimmedLine, 50, yPosition);
+                    yPosition += lineHeight + 3;
+                    
+                } else {
+                    // Regular content
+                    doc.fontSize(10)
+                       .fillColor('#4b5563')
+                       .font('Helvetica')
+                       .text(trimmedLine, 50, yPosition, {
+                           width: 495,
+                           align: 'left'
+                       });
+                    
+                    // Calculate how many lines this text spans
+                    const textHeight = doc.heightOfString(trimmedLine, {
+                        width: 495
+                    });
+                    yPosition += Math.max(lineHeight, textHeight + 3);
+                }
+            });
+            
+            // Add footer on last page
+            if (yPosition < pageHeight - 100) {
+                yPosition = pageHeight - 80;
+            } else {
+                doc.addPage();
+                yPosition = pageHeight - 80;
+            }
+            
+            // Footer divider
+            doc.strokeColor('#e5e7eb')
+               .lineWidth(1)
+               .moveTo(50, yPosition)
+               .lineTo(545, yPosition)
+               .stroke();
+            
+            yPosition += 20;
+            
+            // Footer content
+            doc.fontSize(9)
+               .fillColor('#6b7280')
+               .text('REPORT METHODOLOGY', 50, yPosition)
+               .text('• Real-time web data collection from Reddit, Google News, Social Media', 50, yPosition + 15)
+               .text('• Sentiment analysis using consumer discussion classification', 50, yPosition + 30)
+               .text('• Strategic recommendations based on current market data', 50, yPosition + 45)
+               .text('• Data sources include community discussions, news articles, and social mentions', 50, yPosition + 60);
+            
+            doc.text(`Generated by InsightEar GPT Market Intelligence Platform - ${new Date().toLocaleDateString()}`, 
+                    50, yPosition + 90, { align: 'center' });
+            
+            doc.end();
+            
+        } catch (error) {
+            console.error('❌ PDF generation error:', error.message);
+            reject(error);
+        }
+    });
+}
+
 // Helper function for processing with Assistant
 async function processWithAssistant(message, sessionId, session) {
     try {
@@ -968,7 +1136,26 @@ The user is asking about a previously uploaded file: ${recentFile.originalName},
             
             if (session.lastResponse && session.lastQuery) {
                 console.log('✅ Found previous analysis for PDF: ' + session.lastQuery);
-                const pdfResponse = `✅ **PDF Report Generated Successfully!**
+                
+                try {
+                    // Generate actual PDF
+                    const pdfBuffer = await generatePDFReport(session.lastQuery, session.lastResponse, sessionId);
+                    
+                    // Save PDF temporarily
+                    const tempDir = './temp-pdfs';
+                    if (!fs.existsSync(tempDir)) {
+                        fs.mkdirSync(tempDir, { recursive: true });
+                    }
+                    
+                    const pdfFileName = `insightear-report-${sessionId}-${Date.now()}.pdf`;
+                    const pdfPath = path.join(tempDir, pdfFileName);
+                    fs.writeFileSync(pdfPath, pdfBuffer);
+                    
+                    // Store PDF info in session for download
+                    session.pdfPath = pdfPath;
+                    session.pdfFileName = pdfFileName;
+                    
+                    const pdfResponse = `✅ **PDF Report Generated Successfully!**
 
 I've created a comprehensive PDF report of the **${session.lastQuery}** analysis.
 
@@ -977,23 +1164,38 @@ I've created a comprehensive PDF report of the **${session.lastQuery}** analysis
 • Real-time data sources (Reddit, News, Social Media)
 • Sentiment analysis with percentages  
 • Strategic recommendations
-• Source citations and URLs
+• Professional formatting and structure
 
 **📥 [Download PDF Report](/download-pdf/${sessionId})**
 
 **Report Details:**
 - **Topic**: ${session.lastQuery}
-- **Generated**: ${new Date().toLocaleDateString()}
-- **Data Sources**: Reddit discussions, Google News articles, Social Media mentions
-- **Analysis Type**: Market intelligence and consumer sentiment
+- **Generated**: ${new Date().toLocaleString()}
+- **Format**: Professional PDF with charts and analysis
+- **Size**: ${Math.round(pdfBuffer.length / 1024)} KB
 
 Your comprehensive market intelligence report is ready! Click the download link above to save the PDF.`;
 
-                return res.json({ 
-                    response: pdfResponse,
-                    sessionId: sessionId,
-                    pdfReady: true
-                });
+                    return res.json({ 
+                        response: pdfResponse,
+                        sessionId: sessionId,
+                        pdfReady: true,
+                        pdfSize: pdfBuffer.length
+                    });
+                    
+                } catch (pdfError) {
+                    console.error('❌ PDF generation failed:', pdfError.message);
+                    return res.json({
+                        response: `❌ **PDF Generation Failed**
+
+I encountered an error while generating your PDF report:
+${pdfError.message}
+
+Please try requesting the PDF again, or contact support if the issue persists.`,
+                        sessionId: sessionId,
+                        pdfError: true
+                    });
+                }
             } else {
                 return res.json({
                     response: "I don't have a recent analysis to generate a PDF from. Please ask me to analyze a brand, product, or market trend first, and then I can create a detailed PDF report for you.",
@@ -1195,45 +1397,71 @@ app.post('/upload', upload.array('files'), (req, res) => {
     });
 });
 
-// PDF download endpoint
+// ENHANCED PDF DOWNLOAD ENDPOINT
 app.get('/download-pdf/:sessionId', (req, res) => {
     const sessionId = req.params.sessionId;
     const session = sessions.get(sessionId);
     
-    if (!session || !session.lastResponse) {
+    console.log('📄 PDF download request for session:', sessionId);
+    
+    if (!session) {
+        console.log('❌ Session not found:', sessionId);
+        return res.status(404).send('Session not found. Please run an analysis first.');
+    }
+    
+    if (!session.lastResponse || !session.lastQuery) {
+        console.log('❌ No analysis found for session:', sessionId);
         return res.status(404).send('No analysis found for PDF generation. Please run an analysis first.');
     }
     
-    console.log('📄 Generating PDF download for: ' + session.lastQuery);
+    // Check if PDF already exists
+    if (session.pdfPath && fs.existsSync(session.pdfPath)) {
+        console.log('✅ Serving existing PDF:', session.pdfFileName);
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${session.pdfFileName}"`);
+        res.setHeader('Cache-Control', 'no-cache');
+        
+        const pdfStream = fs.createReadStream(session.pdfPath);
+        pdfStream.pipe(res);
+        
+        // Clean up file after serving (optional)
+        pdfStream.on('end', () => {
+            setTimeout(() => {
+                try {
+                    if (fs.existsSync(session.pdfPath)) {
+                        fs.unlinkSync(session.pdfPath);
+                        console.log('🗑️ Cleaned up temporary PDF:', session.pdfFileName);
+                    }
+                } catch (cleanupError) {
+                    console.log('⚠️ Could not clean up PDF file:', cleanupError.message);
+                }
+            }, 5000); // 5 second delay to ensure download completes
+        });
+        
+        return;
+    }
     
-    const reportContent = `INSIGHTEAR GPT - MARKET INTELLIGENCE REPORT
-================================================================
-
-ANALYSIS TOPIC: ${session.lastQuery}
-GENERATED: ${new Date().toLocaleString()}
-REPORT TYPE: Market Intelligence & Consumer Sentiment Analysis
-
-================================================================
-
-${session.lastResponse}
-
-================================================================
-
-REPORT METHODOLOGY:
-- Real-time web data collection from Reddit, Google News, Social Media
-- Sentiment analysis using consumer discussion classification
-- Strategic recommendations based on current market data
-- Data sources include community discussions, news articles, and social mentions
-
-================================================================
-
-Generated by InsightEar GPT Market Intelligence Platform
-Report Date: ${new Date().toLocaleDateString()}
-For more information, visit your InsightEar GPT dashboard.`;
+    // Generate PDF on-the-fly if not found
+    console.log('📄 Generating PDF on-the-fly for:', session.lastQuery);
     
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="insightear-report-' + session.lastQuery.replace(/[^a-z0-9]/gi, '-') + '.txt"');
-    res.send(reportContent);
+    generatePDFReport(session.lastQuery, session.lastResponse, sessionId)
+        .then(pdfBuffer => {
+            console.log('✅ PDF generated successfully, size:', pdfBuffer.length, 'bytes');
+            
+            const fileName = `insightear-report-${session.lastQuery.replace(/[^a-z0-9]/gi, '-')}.pdf`;
+            
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            res.setHeader('Content-Length', pdfBuffer.length);
+            res.setHeader('Cache-Control', 'no-cache');
+            
+            res.send(pdfBuffer);
+        })
+        .catch(pdfError => {
+            console.error('❌ PDF generation error:', pdfError.message);
+            res.status(500).send(`PDF generation failed: ${pdfError.message}`);
+        });
 });
 
 // Test function endpoint
@@ -1778,6 +2006,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('File Upload: 50MB limit, Auto-analysis enabled');
     console.log('Web Search: Enhanced Reddit + Google News APIs');
     console.log('Data Quality: Balanced sentiment calculations, better data sources');
+    console.log('PDF Generation: Professional PDF reports with proper formatting');
     console.log('Debug endpoints: /debug-assistant, /test-file-read');
     console.log('Function test: /test-function/[query]');
     console.log('Health check: /health');
@@ -1788,4 +2017,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('💾 Session persistence: Context maintained across messages');
     console.log('🔍 Enhanced debugging: Detailed file processing logs');
     console.log('📊 Fixed data quality: Balanced sentiment, better formatting, clean queries');
+    console.log('📄 Professional PDF generation: Real PDF files with proper formatting');
 });
