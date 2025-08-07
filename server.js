@@ -44,6 +44,9 @@ const upload = multer({
     limits: { fileSize: 50 * 1024 * 1024 }
 });
 
+// Session storage - moved to top level for global access
+const sessions = new Map();
+
 // Simple test endpoints for debugging (add right after middleware)
 app.get('/test', (req, res) => {
     console.log('Test endpoint hit');
@@ -1391,9 +1394,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('OpenAI Key: ' + (process.env.OPENAI_API_KEY ? 'Configured' : 'NOT SET'));
     console.log('✅ Ready for market intelligence, file analysis, and professional template reports!');
     
-    // Keep Railway happy with periodic logging
+    // Keep Railway happy with periodic logging (FIXED - check if sessions exists)
     setInterval(() => {
-        console.log('Server alive - Sessions:', sessions.size, '- Memory:', Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB');
+        const sessionCount = typeof sessions !== 'undefined' ? sessions.size : 0;
+        const memoryMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+        console.log('Server alive - Sessions:', sessionCount, '- Memory:', memoryMB + 'MB');
     }, 300000); // Every 5 minutes
 });
 
