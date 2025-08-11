@@ -29,7 +29,7 @@ const API_CONFIG = {
     reddit: {
         clientId: process.env.REDDIT_CLIENT_ID,
         clientSecret: process.env.REDDIT_CLIENT_SECRET,
-        userAgent: 'InsightEar/1.0 Market Research Bot'
+        userAgent: 'web:InsightEar:v1.0.0 (by /u/testuser)'
     }
 };
 
