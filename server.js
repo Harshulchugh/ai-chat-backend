@@ -29,7 +29,7 @@ const API_CONFIG = {
     reddit: {
         clientId: process.env.REDDIT_CLIENT_ID,
         clientSecret: process.env.REDDIT_CLIENT_SECRET,
-        userAgent: 'web:InsightEar:v1.0.0 (by /u/testuser)'
+        userAgent: 'web:InsightEarGPT:v1.0.0 (by /u/marketresearch)'
     }
 };
 
@@ -68,7 +68,7 @@ const upload = multer({
     limits: { fileSize: 50 * 1024 * 1024 }
 });
 
-// REAL REDDIT API INTEGRATION
+// FIXED REDDIT API INTEGRATION
 async function ensureRedditToken() {
     if (redditToken && redditTokenExpiry && Date.now() < redditTokenExpiry) {
         return redditToken;
@@ -77,6 +77,10 @@ async function ensureRedditToken() {
     try {
         const auth = Buffer.from(`${API_CONFIG.reddit.clientId}:${API_CONFIG.reddit.clientSecret}`).toString('base64');
         
+        console.log('🔍 Attempting Reddit authentication...');
+        console.log('Client ID length:', API_CONFIG.reddit.clientId ? API_CONFIG.reddit.clientId.length : 'missing');
+        console.log('Client Secret length:', API_CONFIG.reddit.clientSecret ? API_CONFIG.reddit.clientSecret.length : 'missing');
+        
         const response = await axios.post(
             'https://www.reddit.com/api/v1/access_token',
             'grant_type=client_credentials',
@@ -84,48 +88,133 @@ async function ensureRedditToken() {
                 headers: {
                     'Authorization': `Basic ${auth}`,
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': API_CONFIG.reddit.userAgent
-                }
+                    'User-Agent': 'web:InsightEarGPT:v1.0.0 (by /u/marketresearch)'
+                },
+                timeout: 10000
             }
         );
 
         redditToken = response.data.access_token;
-        redditTokenExpiry = Date.now() + (response.data.expires_in * 1000);
-        console.log('✅ Reddit token refreshed successfully');
+        redditTokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000; // 1 min buffer
+        console.log('✅ Reddit token obtained successfully, expires in:', response.data.expires_in, 'seconds');
         return redditToken;
 
     } catch (error) {
-        console.error('❌ Reddit auth error:', error.message);
-        throw new Error('Reddit authentication failed: ' + error.message);
+        console.error('❌ Reddit auth detailed error:');
+        console.error('Status:', error.response?.status);
+        console.error('Data:', error.response?.data);
+        console.error('Headers:', error.response?.headers);
+        
+        // Try alternative user agent
+        if (error.response?.status === 401) {
+            console.log('🔄 Trying alternative authentication...');
+            try {
+                const altResponse = await axios.post(
+                    'https://www.reddit.com/api/v1/access_token',
+                    'grant_type=client_credentials',
+                    {
+                        headers: {
+                            'Authorization': `Basic ${auth}`,
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'User-Agent': 'InsightEar:1.0:market-research (by /u/apiuser)'
+                        },
+                        timeout: 10000
+                    }
+                );
+                
+                redditToken = altResponse.data.access_token;
+                redditTokenExpiry = Date.now() + (altResponse.data.expires_in * 1000) - 60000;
+                console.log('✅ Alternative Reddit auth successful');
+                return redditToken;
+                
+            } catch (altError) {
+                console.error('❌ Alternative auth also failed:', altError.response?.data);
+            }
+        }
+        
+        throw new Error('Reddit authentication failed: ' + (error.response?.data?.message || error.message));
     }
 }
 
-// REAL REDDIT SEARCH FUNCTION
+// FIXED REDDIT SEARCH FUNCTION
 async function searchRedditData(query) {
     console.log('🔍 Searching Reddit for:', query);
     
     try {
         const token = await ensureRedditToken();
         
-        const searchResponse = await axios.get('https://oauth.reddit.com/search', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'User-Agent': API_CONFIG.reddit.userAgent
-            },
-            params: {
-                q: query,
-                sort: 'new',
-                limit: 50,
-                t: 'month',
-                type: 'link,self'
-            }
-        });
+        // Try subreddit-specific search first (more reliable)
+        const subreddits = ['stocks', 'investing', 'SecurityAnalysis', 'ValueInvesting', 'business'];
+        let allPosts = [];
+        
+        for (const subreddit of subreddits) {
+            try {
+                const searchResponse = await axios.get(`https://oauth.reddit.com/r/${subreddit}/search`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'User-Agent': 'web:InsightEarGPT:v1.0.0 (by /u/marketresearch)'
+                    },
+                    params: {
+                        q: query,
+                        restrict_sr: true,
+                        sort: 'new',
+                        limit: 10,
+                        t: 'month'
+                    },
+                    timeout: 8000
+                });
 
-        const posts = searchResponse.data.data.children.map(child => child.data);
-        console.log(`📱 Found ${posts.length} real Reddit posts for ${query}`);
+                if (searchResponse.data.data.children.length > 0) {
+                    allPosts.push(...searchResponse.data.data.children.map(child => child.data));
+                    console.log(`📱 Found ${searchResponse.data.data.children.length} posts in r/${subreddit}`);
+                }
+                
+                // Rate limiting - wait between requests
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+            } catch (subError) {
+                console.log(`⚠️ r/${subreddit} search failed:`, subError.message);
+                continue;
+            }
+        }
+        
+        // Fallback to general search if subreddit search fails
+        if (allPosts.length === 0) {
+            console.log('🔄 Trying general Reddit search...');
+            try {
+                const generalResponse = await axios.get('https://oauth.reddit.com/search', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'User-Agent': 'web:InsightEarGPT:v1.0.0 (by /u/marketresearch)'
+                    },
+                    params: {
+                        q: query,
+                        sort: 'new',
+                        limit: 25,
+                        t: 'month',
+                        type: 'link'
+                    },
+                    timeout: 8000
+                });
+                
+                allPosts = generalResponse.data.data.children.map(child => child.data);
+                console.log(`📱 General search found ${allPosts.length} posts`);
+                
+            } catch (generalError) {
+                console.error('❌ General Reddit search failed:', generalError.message);
+                return {
+                    search_successful: false,
+                    error: 'Reddit search failed: ' + generalError.message,
+                    fallback_used: true,
+                    total_posts: 0
+                };
+            }
+        }
+
+        console.log(`📱 Total Reddit posts found for ${query}: ${allPosts.length}`);
 
         // Process real posts for sentiment and themes
-        const processedPosts = posts.map(post => ({
+        const processedPosts = allPosts.map(post => ({
             id: post.id,
             title: post.title,
             content: post.selftext || post.title,
@@ -141,12 +230,12 @@ async function searchRedditData(query) {
         // Calculate real sentiment from actual posts
         const sentiment = calculateSentimentFromPosts(processedPosts);
         const themes = extractThemesFromPosts(processedPosts);
-        const topSubreddits = getTopSubreddits(posts);
+        const topSubreddits = getTopSubreddits(allPosts);
 
         return {
             search_successful: true,
             query_processed: query,
-            total_posts: posts.length,
+            total_posts: allPosts.length,
             processed_posts: processedPosts,
             sentiment_breakdown: sentiment,
             themes: themes,
@@ -160,7 +249,8 @@ async function searchRedditData(query) {
         return {
             search_successful: false,
             error: 'Reddit API error: ' + error.message,
-            fallback_used: true
+            fallback_used: true,
+            total_posts: 0
         };
     }
 }
@@ -223,39 +313,49 @@ async function searchNewsData(query) {
     }
 }
 
-// COMBINED REAL MARKET ANALYSIS
+// FIXED COMBINED REAL MARKET ANALYSIS
 async function handleRealMarketAnalysis(query) {
     console.log('🔍 Starting REAL market analysis for:', query);
     
     const company = extractCompanyName(query);
     
     try {
+        // Create SINGLE analysis ID at the start
+        const analysisId = 'analysis-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        console.log('📊 Creating analysis with ID:', analysisId);
+        
         // Get real Reddit data
         const redditData = await searchRedditData(company);
         
         // Get real News data
         const newsData = await searchNewsData(company);
         
-        // Store for drilldown capabilities
-        const analysisId = 'analysis-' + Date.now();
-        researchCache.set(analysisId, {
+        // Store IMMEDIATELY for drilldown capabilities
+        const analysisData = {
+            analysis_id: analysisId,
             company: company,
             reddit_data: redditData,
             news_data: newsData,
             timestamp: new Date().toISOString(),
-            has_real_data: true
-        });
+            has_real_data: true,
+            query_processed: query
+        };
+        
+        researchCache.set(analysisId, analysisData);
+        console.log('✅ Analysis data stored with ID:', analysisId);
+        console.log('📊 Cache now has', researchCache.size, 'analyses');
         
         // Combine real data for comprehensive analysis
         const combinedAnalysis = {
-            analysis_id: analysisId,
+            analysis_id: analysisId, // IMPORTANT: Return the same ID
             company: company,
             timestamp: new Date().toISOString(),
             data_sources: ['Real Reddit API', 'Real NewsAPI'],
             reddit_analysis: redditData,
             news_analysis: newsData,
             combined_insights: generateCombinedInsights(redditData, newsData, company),
-            drilldown_available: true
+            drilldown_available: true,
+            cache_stored: true
         };
         
         console.log('✅ Real market analysis completed for:', company);
@@ -325,20 +425,39 @@ async function handleWebSearch(query) {
     }
 }
 
-// DRILLDOWN FUNCTIONALITY
+// FIXED DRILLDOWN FUNCTIONALITY
 async function handleDrilldownQuery(question, sessionId) {
     console.log('🔍 Processing drilldown query:', question);
+    console.log('🔍 Session ID:', sessionId);
     
     // Find the most recent analysis for this session
     const session = sessions.get(sessionId);
+    console.log('📊 Session found:', !!session);
+    console.log('📊 Session lastAnalysisId:', session?.lastAnalysisId);
+    
     if (!session || !session.lastAnalysisId) {
-        return "I don't have recent analysis data to drill down into. Please run a market analysis first, then ask specific questions about the results.";
+        console.log('❌ No session or analysis ID found');
+        return "I don't have recent analysis data to drill down into. Please run a market analysis first (e.g., 'analyze Tesla sentiment'), then ask specific questions about the results.";
     }
     
     const analysisData = researchCache.get(session.lastAnalysisId);
+    console.log('📊 Analysis data found in cache:', !!analysisData);
+    console.log('📊 Available cache keys:', Array.from(researchCache.keys()));
+    
     if (!analysisData) {
-        return "Analysis data not found. Please run a new market analysis.";
+        console.log('❌ Analysis data not found in cache for ID:', session.lastAnalysisId);
+        
+        // Debug: Show what's in the cache
+        const cacheDebug = Array.from(researchCache.entries()).map(([id, data]) => ({
+            id: id,
+            company: data.company,
+            timestamp: data.timestamp
+        }));
+        
+        return `Analysis data not found in cache. Please run a new market analysis first.\n\nDebug Info:\n- Looking for: ${session.lastAnalysisId}\n- Available analyses: ${JSON.stringify(cacheDebug, null, 2)}`;
     }
+    
+    console.log('✅ Found analysis data for company:', analysisData.company);
     
     const lowerQuestion = question.toLowerCase();
     
@@ -355,6 +474,9 @@ async function handleDrilldownQuery(question, sessionId) {
         return getDrilldownSentimentBreakdown(analysisData);
     } else if (lowerQuestion.includes('subreddit') || lowerQuestion.includes('where')) {
         return getDrilldownSubreddits(analysisData);
+    } else if (lowerQuestion.includes('source') || lowerQuestion.includes('article') || lowerQuestion.includes('show me')) {
+        // Generic "show me" or "sources" - show both Reddit and News
+        return getGenericDrilldown(analysisData, question);
     } else {
         return getGenericDrilldown(analysisData, question);
     }
@@ -1011,7 +1133,7 @@ function generateTemplateReport(sessionData) {
     return professionalReport;
 }
 
-// ENHANCED ASSISTANT PROCESSING WITH REAL DATA AND DRILLDOWN
+// FIXED ASSISTANT PROCESSING WITH REAL DATA AND DRILLDOWN
 async function processWithAssistant(message, sessionId, session) {
     try {
         console.log('=== ASSISTANT PROCESSING WITH REAL DATA + DRILLDOWN ===');
@@ -1020,7 +1142,7 @@ async function processWithAssistant(message, sessionId, session) {
         // Check if this is a drilldown query
         const drilldownKeywords = [
             'show me', 'what are', 'breakdown', 'themes', 'posts', 'articles', 
-            'headlines', 'subreddit', 'negative', 'positive', 'sentiment'
+            'headlines', 'subreddit', 'negative', 'positive', 'sentiment', 'sources'
         ];
         
         const isDrilldown = drilldownKeywords.some(keyword => 
@@ -1124,11 +1246,9 @@ async function processWithAssistant(message, sessionId, session) {
                     
                     // Enhanced session storage with real data flag and analysis ID
                     const cleanQuery = extractCleanQuery(message);
-                    const analysisId = 'analysis-' + Date.now();
                     
                     session.lastQuery = cleanQuery;
                     session.lastResponse = assistantResponse;
-                    session.lastAnalysisId = analysisId;
                     session.timestamp = new Date().toISOString();
                     session.hasRealData = true;
                     
@@ -1159,10 +1279,15 @@ async function processWithAssistant(message, sessionId, session) {
                             } else if (toolCall.function.name === 'analyze_real_market_data') {
                                 output = await handleRealMarketAnalysis(args.query);
                                 
-                                // Store analysis ID for drilldown
-                                const analysisData = JSON.parse(output);
-                                if (analysisData.analysis_id) {
-                                    session.lastAnalysisId = analysisData.analysis_id;
+                                // FIXED: Properly extract and store analysis ID
+                                try {
+                                    const analysisData = JSON.parse(output);
+                                    if (analysisData.analysis_id) {
+                                        session.lastAnalysisId = analysisData.analysis_id;
+                                        console.log('✅ Stored analysis ID in session:', analysisData.analysis_id);
+                                    }
+                                } catch (parseError) {
+                                    console.error('❌ Failed to parse analysis data for ID extraction:', parseError.message);
                                 }
                                 
                                 console.log('✅ Real market analysis with drilldown completed for:', args.query);
@@ -1219,7 +1344,7 @@ app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: 'InsightEar GPT - Complete with Real APIs + Drilldown',
+        version: 'InsightEar GPT - Complete FIXED with Real APIs + Drilldown',
         sessions_active: sessions.size,
         research_cache: researchCache.size,
         uptime_seconds: Math.round(process.uptime()),
@@ -1236,14 +1361,16 @@ app.get('/health', (req, res) => {
             pdf_generation: true,
             drilldown_capability: true,
             sentiment_analysis: true,
-            theme_extraction: true
+            theme_extraction: true,
+            fixed_reddit_auth: true,
+            fixed_drilldown_linking: true
         }
     });
 });
 
 app.get('/test', (req, res) => {
     res.json({
-        message: 'InsightEar GPT Server with REAL APIs + Drilldown is working!',
+        message: 'InsightEar GPT Server with FIXED REAL APIs + Drilldown is working!',
         timestamp: new Date().toISOString(),
         sessions_count: sessions.size,
         cache_count: researchCache.size,
@@ -1251,17 +1378,17 @@ app.get('/test', (req, res) => {
             reddit: !!API_CONFIG.reddit.clientId,
             news: !!API_CONFIG.newsApi.key
         },
-        features: ['real_data', 'drilldown', 'file_processing', 'pdf_generation']
+        features: ['fixed_real_data', 'fixed_drilldown', 'file_processing', 'pdf_generation']
     });
 });
 
-// MAIN CHAT ENDPOINT WITH REAL API INTEGRATION + DRILLDOWN
+// MAIN CHAT ENDPOINT WITH FIXED REAL API INTEGRATION + DRILLDOWN
 app.post('/chat', upload.array('files', 10), async (req, res) => {
-    console.log('=== MAIN CHAT WITH REAL APIS + DRILLDOWN ===');
+    console.log('=== MAIN CHAT WITH FIXED REAL APIS + DRILLDOWN ===');
     
     try {
         const userMessage = req.body.message || '';
-        const sessionId = req.headers['x-session-id'] || 'session-' + Date.now();
+        const sessionId = req.headers['x-session-id'] || 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const uploadedFiles = req.files || [];
 
         const session = getSession(sessionId);
@@ -1346,26 +1473,26 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
         // Handle greetings
         const greetings = ['hi', 'hello', 'hey', 'test'];
         if (greetings.includes(userMessage.toLowerCase().trim())) {
-            const greetingResponse = 'Hello! I am InsightEar GPT with **REAL API integration + Full Drilldown**!\n\n' +
+            const greetingResponse = 'Hello! I am InsightEar GPT with **FIXED REAL API integration + Full Drilldown**!\n\n' +
                 '## What Makes Me Different:\n\n' +
-                '**🔍 Real Data Sources**\n' +
-                '• Reddit API: Authentic user discussions and sentiment\n' +
+                '**🔍 Real Data Sources (FIXED)**\n' +
+                '• Reddit API: Fixed authentication - Authentic user discussions\n' +
                 '• NewsAPI: Real headlines from Reuters, Bloomberg, TechCrunch\n' +
                 '• Verified data from authenticated API connections\n\n' +
                 '**📊 Real Market Intelligence**\n' +
                 '• Actual Reddit posts and comments analysis\n' +
                 '• Real news coverage and press mentions\n' +
                 '• Authentic sentiment from verified sources\n\n' +
-                '**💎 Full Drilldown Capabilities**\n' +
-                '• "Show me the actual Reddit posts"\n' +
-                '• "What are the real negative themes?"\n' +
-                '• "Break down the actual data sources"\n' +
-                '• "Which subreddits discuss this topic?"\n\n' +
+                '**💎 Fixed Full Drilldown Capabilities**\n' +
+                '• "Show me the actual Reddit posts" → Working links\n' +
+                '• "What are the real negative themes?" → Real breakdown\n' +
+                '• "Break down the actual data sources" → Verified sources\n' +
+                '• "Which subreddits discuss this topic?" → Real subreddit data\n\n' +
                 '**📁 File Processing + PDF Reports**\n' +
                 '• Upload documents for professional analysis\n' +
                 '• Generate executive-ready reports\n' +
                 '• All with real data verification\n\n' +
-                'Try: "analyze Tesla sentiment" for REAL market research with drilldown!';
+                'Try: "analyze Tesla sentiment" for REAL market research with working drilldown!';
             
             return res.json({
                 response: greetingResponse,
@@ -1374,8 +1501,8 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
             });
         }
 
-        // Process real market intelligence with drilldown
-        console.log('🔍 Starting real API market analysis with drilldown...');
+        // Process real market intelligence with fixed drilldown
+        console.log('🔍 Starting fixed real API market analysis with drilldown...');
         const response = await processWithAssistant(userMessage, sessionId, session);
         
         return res.json({ 
@@ -1383,11 +1510,11 @@ app.post('/chat', upload.array('files', 10), async (req, res) => {
             sessionId: sessionId,
             hasRealData: session.hasRealData,
             drilldownAvailable: !!session.lastAnalysisId,
-            analysisType: 'real_api_with_drilldown'
+            analysisType: 'fixed_real_api_with_drilldown'
         });
         
     } catch (error) {
-        console.error('Real API chat error:', error);
+        console.error('Fixed real API chat error:', error);
         return res.json({ 
             response: 'Technical difficulties with real API processing: ' + error.message,
             sessionId: req.headers['x-session-id'] || 'error-session',
@@ -1407,30 +1534,30 @@ app.get('/download-pdf/:sessionId', (req, res) => {
     
     try {
         const reportContent = generateTemplateReport(session);
-        const fileName = 'insightear-real-data-drilldown-report-' + session.lastQuery.replace(/[^a-z0-9]/gi, '-').toLowerCase() + '.txt';
+        const fileName = 'insightear-fixed-real-data-drilldown-report-' + session.lastQuery.replace(/[^a-z0-9]/gi, '-').toLowerCase() + '.txt';
         
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename="' + fileName + '"');
         res.send(reportContent);
         
     } catch (error) {
-        console.error('Real data report generation error:', error);
+        console.error('Fixed real data report generation error:', error);
         res.status(500).send('Report generation failed: ' + error.message);
     }
 });
 
-// DEBUG ENDPOINTS
+// ENHANCED DEBUG ENDPOINTS
 app.get('/debug', (req, res) => {
     const debugHTML = `<!DOCTYPE html>
     <html>
-    <head><title>Real API + Drilldown Debug Console</title></head>
+    <head><title>FIXED Real API + Drilldown Debug Console</title></head>
     <body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
-        <h1>🔍 InsightEar Real API + Drilldown Debug</h1>
+        <h1>🔍 InsightEar FIXED Real API + Drilldown Debug</h1>
         <div id="results" style="border: 1px solid #ccc; padding: 15px; margin: 10px 0; min-height: 200px; background: white; border-radius: 8px;"></div>
         <button onclick="testReddit()">Test Reddit API</button>
         <button onclick="testNews()">Test NewsAPI</button>
-        <button onclick="testRealAnalysis()">Test Real Analysis</button>
-        <button onclick="testDrilldown()">Test Drilldown</button>
+        <button onclick="testRealAnalysis()">Test Fixed Analysis</button>
+        <button onclick="testDrilldown()">Test Fixed Drilldown</button>
         <button onclick="clearResults()">Clear</button>
         
         <script>
@@ -1441,7 +1568,7 @@ app.get('/debug', (req, res) => {
             function clearResults() { document.getElementById('results').innerHTML = '<p style="color: #666;">Debug console cleared. Ready for testing...</p>'; }
             
             async function testReddit() {
-                log('🔍 Testing Reddit API...');
+                log('🔍 Testing FIXED Reddit API...');
                 log('Reddit Client ID: ${API_CONFIG.reddit.clientId ? 'Configured' : 'Missing'}');
                 log('Reddit Secret: ${API_CONFIG.reddit.clientSecret ? 'Configured' : 'Missing'}');
             }
@@ -1452,27 +1579,57 @@ app.get('/debug', (req, res) => {
             }
             
             async function testRealAnalysis() {
-                log('🚀 Testing complete real analysis...');
+                log('🚀 Testing complete FIXED real analysis...');
+                const testSessionId = 'debug-test-' + Date.now();
+                
                 try {
+                    // Step 1: Run analysis
+                    log('📊 Step 1: Running market analysis...');
                     const response = await fetch('/chat', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Session-ID': 'debug-full-' + Date.now() },
+                        headers: { 'Content-Type': 'application/json', 'X-Session-ID': testSessionId },
                         body: JSON.stringify({ message: 'analyze Tesla sentiment using real APIs' })
                     });
                     const data = await response.json();
-                    log('✅ Real analysis: ' + (data.hasRealData ? 'SUCCESS with real APIs' : 'using fallback'));
+                    log('✅ Analysis result: ' + (data.hasRealData ? 'SUCCESS with real APIs' : 'using fallback'));
                     log('✅ Drilldown available: ' + (data.drilldownAvailable ? 'YES' : 'NO'));
+                    
+                    // Step 2: Test drilldown
+                    if (data.drilldownAvailable) {
+                        log('📊 Step 2: Testing drilldown...');
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+                        
+                        const drilldownResponse = await fetch('/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-Session-ID': testSessionId },
+                            body: JSON.stringify({ message: 'show me the Reddit posts' })
+                        });
+                        const drilldownData = await drilldownResponse.json();
+                        
+                        if (drilldownData.response.includes('Analysis data not found')) {
+                            log('❌ Drilldown FAILED: ' + drilldownData.response.substring(0, 100));
+                        } else {
+                            log('✅ Drilldown SUCCESS: ' + drilldownData.response.substring(0, 100) + '...');
+                        }
+                    }
+                    
+                    // Step 3: Check session storage
+                    log('📊 Step 3: Checking session storage...');
+                    const sessionsResponse = await fetch('/sessions');
+                    const sessionsData = await sessionsResponse.json();
+                    log('✅ Sessions: ' + sessionsData.totalSessions + ', Cache: ' + sessionsData.totalCached);
+                    
                 } catch (error) {
-                    log('❌ Real analysis failed: ' + error.message);
+                    log('❌ Test failed: ' + error.message);
                 }
             }
             
             async function testDrilldown() {
-                log('🔍 Testing drilldown capability...');
+                log('🔍 Testing FIXED drilldown capability...');
                 try {
                     const response = await fetch('/chat', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Session-ID': 'debug-full-' + Date.now() },
+                        headers: { 'Content-Type': 'application/json', 'X-Session-ID': 'debug-drill-' + Date.now() },
                         body: JSON.stringify({ message: 'show me the Reddit posts about Tesla' })
                     });
                     const data = await response.json();
@@ -1521,7 +1678,7 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>InsightEar GPT - Real Market Research + Drilldown</title>
+        <title>InsightEar GPT - FIXED Real Market Research + Drilldown</title>
         <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; }
             .chat-container { background: white; border-radius: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.15); width: 100%; max-width: 900px; height: 700px; display: flex; flex-direction: column; overflow: hidden; }
@@ -1542,20 +1699,20 @@ app.get('/', (req, res) => {
         <div class="chat-container">
             <div class="header">
                 <h1>🔍 InsightEar GPT</h1>
-                <p>Real Market Research • Reddit API • NewsAPI • Full Drilldown</p>
+                <p>FIXED Real Market Research • Reddit API • NewsAPI • Full Drilldown</p>
             </div>
             <div class="messages" id="chatMessages">
                 <div class="message assistant-message">
-                    <strong>Welcome to InsightEar GPT with REAL APIs + Full Drilldown! 🚀</strong><br><br>
-                    I now provide <strong>authentic market research</strong> with complete drilldown capabilities:<br><br>
-                    <strong>📱 Reddit API:</strong> Real user discussions and sentiment analysis<br>
+                    <strong>Welcome to InsightEar GPT with FIXED REAL APIs + Full Drilldown! 🚀</strong><br><br>
+                    I now provide <strong>authentic market research</strong> with fixed drilldown capabilities:<br><br>
+                    <strong>📱 Reddit API:</strong> FIXED authentication - Real user discussions<br>
                     <strong>📰 NewsAPI:</strong> Authentic headlines from Reuters, Bloomberg, TechCrunch<br>
-                    <strong>🔍 Full Drilldown:</strong> Drill into actual data sources<br>
+                    <strong>🔍 Full Drilldown:</strong> FIXED - Drill into actual data sources<br>
                     <strong>📁 File Processing:</strong> Upload documents for professional analysis<br><br>
                     <strong>Try these examples:</strong><br>
                     • "analyze Tesla sentiment" → Get real Reddit + news data<br>
-                    • "show me the Reddit posts" → See actual discussions<br>
-                    • "what are the negative themes?" → Real breakdown<br><br>
+                    • "show me the Reddit posts" → See actual discussions with working links<br>
+                    • "what are the negative themes?" → Real breakdown from actual data<br><br>
                     Ready for honest market intelligence with verifiable sources!
                 </div>
             </div>
@@ -1595,7 +1752,7 @@ app.get('/', (req, res) => {
                 messageInput.value = "";
                 fileInput.value = "";
                 
-                const loadingMsg = addMessage("🔍 Processing with real APIs...", "assistant");
+                const loadingMsg = addMessage("🔍 Processing with FIXED real APIs...", "assistant");
                 sendButton.disabled = true;
                 
                 try {
@@ -1649,7 +1806,7 @@ app.get('/', (req, res) => {
             }
             
             messageInput.focus();
-            console.log("🚀 InsightEar GPT with Real APIs + Drilldown loaded");
+            console.log("🚀 InsightEar GPT with FIXED Real APIs + Drilldown loaded");
         </script>
     </body>
     </html>`;
@@ -1659,45 +1816,46 @@ app.get('/', (req, res) => {
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received - shutting down real API + drilldown server gracefully');
+    console.log('SIGTERM received - shutting down FIXED real API + drilldown server gracefully');
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('SIGINT received - shutting down real API + drilldown server gracefully');
+    console.log('SIGINT received - shutting down FIXED real API + drilldown server gracefully');
     process.exit(0);
 });
 
 // Error handling
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception in real API + drilldown server:', error);
+    console.error('Uncaught Exception in FIXED real API + drilldown server:', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection in real API + drilldown server:', promise, reason);
+    console.error('Unhandled Rejection in FIXED real API + drilldown server:', promise, reason);
 });
 
 // Start server
 const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log('🚀 InsightEar GPT Server Started - COMPLETE: REAL APIS + FULL DRILLDOWN');
+    console.log('🚀 InsightEar GPT Server Started - COMPLETE FIXED: REAL APIS + FULL DRILLDOWN');
     console.log('Port: ' + PORT);
     console.log('Real APIs Status:');
-    console.log('  📱 Reddit API: ' + (API_CONFIG.reddit.clientId ? '✅ Ready' : '❌ Not configured'));
+    console.log('  📱 Reddit API: ' + (API_CONFIG.reddit.clientId ? '✅ Ready (FIXED AUTH)' : '❌ Not configured'));
     console.log('  📰 NewsAPI: ' + (API_CONFIG.newsApi.key ? '✅ Ready' : '❌ Not configured'));
     console.log('  🤖 OpenAI: ' + (process.env.ASSISTANT_ID ? '✅ Ready' : '❌ Not configured'));
     console.log('Features Enabled:');
-    console.log('  🔍 Real market research with authentic data sources');
-    console.log('  💎 Full drilldown capabilities with source links');
+    console.log('  🔍 FIXED real market research with authentic data sources');
+    console.log('  💎 FIXED full drilldown capabilities with working source links');
     console.log('  📁 File processing and analysis');
     console.log('  📋 Professional PDF report generation');
     console.log('  🎯 Sentiment analysis from real content');
     console.log('  📊 Theme extraction from actual discussions');
-    console.log('✅ Ready for professional market intelligence with complete drilldown!');
+    console.log('  🔧 FIXED Reddit authentication and session linking');
+    console.log('✅ Ready for professional market intelligence with WORKING drilldown!');
 });
 
 // Keep-alive for Railway
 setInterval(() => {
-    console.log(`💓 Real API + Drilldown Server - Sessions: ${sessions.size}, Cache: ${researchCache.size}, Memory: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`);
+    console.log(`💓 FIXED Real API + Drilldown Server - Sessions: ${sessions.size}, Cache: ${researchCache.size}, Memory: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`);
 }, 5 * 60 * 1000);
 
 module.exports = app;
