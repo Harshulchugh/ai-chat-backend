@@ -26,7 +26,8 @@
     "business-intelligence",
     "reddit-api",
     "news-api",
-    "real-data"
+    "real-data",
+    "drilldown"
   ],
   "author": "InsightEar GPT"
 }
