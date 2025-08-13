@@ -1,11 +1,12 @@
 {
   "name": "insightear-gpt-enhanced",
-  "version": "2.0.0",
-  "description": "InsightEar GPT - Professional Market Intelligence Assistant with Real APIs",
+  "version": "2.1.0",
+  "description": "InsightEar GPT - Enhanced Professional Market Intelligence Assistant with Real APIs and Direct Article Links",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node --version"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -17,7 +18,8 @@
     "dotenv": "^16.3.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   },
   "keywords": [
     "market-research",
@@ -27,7 +29,14 @@
     "reddit-api",
     "news-api",
     "real-data",
-    "drilldown"
+    "drilldown",
+    "enhanced",
+    "direct-links"
   ],
-  "author": "InsightEar GPT"
+  "author": "InsightEar GPT Enhanced",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "your-github-repo-url"
+  }
 }
