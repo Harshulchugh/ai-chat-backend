@@ -522,7 +522,24 @@ async function handleDrilldownQuery(question, sessionId) {
     if (!session || !session.lastAnalysisId) {
         console.log('❌ No session or analysis ID found');
         return "I don't have recent analysis data to drill down into. Please run a market analysis first (e.g., 'analyze Tesla sentiment'), then ask specific questions about the results.";
+   async function getOrCreateConversation(sessionId, session) {
+    if (session.conversationId) {
+        return session.conversationId;
     }
+
+    const conversation = await openai.conversations.create({
+        metadata: {
+            session_id: sessionId
+        }
+    });
+
+    session.conversationId = conversation.id;
+    sessions.set(sessionId, session);
+
+    console.log('✅ OpenAI Conversation created:', conversation.id);
+
+    return conversation.id;
+} }
     
     const analysisData = researchCache.get(session.lastAnalysisId);
     console.log('📊 Analysis data found in cache:', !!analysisData);
