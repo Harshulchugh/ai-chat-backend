@@ -97,7 +97,7 @@ let redditTokenExpiry = null;
 console.log('🚀 InsightEar GPT Server Starting - COMPLETE FINAL VERSION...');
 console.log('📰 NewsAPI Key:', API_CONFIG.newsApi.key ? '✅ Configured' : '❌ Missing');
 console.log('📱 Reddit API:', API_CONFIG.reddit.clientId ? '✅ Configured' : '❌ Missing');
-console.log('🤖 OpenAI Assistant:', process.env.ASSISTANT_ID ? '✅ Configured' : '❌ Missing');
+console.log('🤖 OpenAI Assistant:', process.env.OPENAI_API_KEY ? '✅ Configured' : '❌ Missing');
 
 // Middleware
 app.use(cors());
@@ -1648,7 +1648,7 @@ app.get('/health', (req, res) => {
         real_apis: {
             reddit: !!API_CONFIG.reddit.clientId,
             news: !!API_CONFIG.newsApi.key,
-            openai: !!process.env.ASSISTANT_ID
+            openai: !!process.env.OPENAI_API_KEY
         },
         features: {
             enhanced_real_reddit_api: true,
@@ -2165,7 +2165,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('📊 Real APIs Status:');
     console.log('  📱 Reddit API: ' + (API_CONFIG.reddit.clientId ? '✅ Ready (ENHANCED AUTH with fallbacks)' : '❌ Not configured'));
     console.log('  📰 NewsAPI: ' + (API_CONFIG.newsApi.key ? '✅ Ready (ENHANCED filtering)' : '❌ Not configured'));
-    console.log('  🤖 OpenAI: ' + (process.env.ASSISTANT_ID ? '✅ Ready (ENHANCED integration)' : '❌ Not configured'));
+    console.log('  🤖 OpenAI: ' + (process.env.OPENAI_API_KEY ? '✅ Ready (ENHANCED integration)' : '❌ Not configured'));
     console.log('');
     console.log('🎯 Enhanced Features Enabled:');
     console.log('  🔍 ENHANCED real market research with authentic data sources');
