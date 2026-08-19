@@ -19,7 +19,10 @@ const researchCache = new Map();
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
-
+const INSIGHTEAR_INSTRUCTIONS = fs.readFileSync(
+    path.join(__dirname, 'insightear-prompt.txt'),
+    'utf8'
+);
 // API Configuration
 const API_CONFIG = {
     newsApi: {
