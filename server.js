@@ -202,7 +202,7 @@ async function searchRedditData(query) {
                 
                 for (const subreddit of subreddits) {
                     try {
-                        console.log(`🔍 Searching r/${subreddit} for ${query}...`);
+                        allPosts = allPosts.slice(0, 12);console.log(`🔍 Searching r/${subreddit} for ${query}...`);
                         const searchResponse = await axios.get(`https://oauth.reddit.com/r/${subreddit}/search`, {
                             headers: {
                                 'Authorization': `Bearer ${token}`,
@@ -289,7 +289,7 @@ async function searchRedditData(query) {
         const processedPosts = allPosts.map(post => ({
             id: post.id,
             title: post.title,
-            content: post.selftext || post.title,
+            content: (post.selftext || post.title).substring(0, 1500),
             subreddit: post.subreddit,
             score: post.score,
             comments: post.num_comments,
@@ -336,7 +336,7 @@ async function searchNewsData(query) {
             params: {
                 q: query,
                 sortBy: 'publishedAt',
-                pageSize: 50,
+                pageSize: 15,
                 language: 'en',
                 apiKey: API_CONFIG.newsApi.key,
                 from: getDateDaysAgo(30), // Last 30 days
@@ -1482,6 +1482,7 @@ async function processWithAssistant(message, sessionId, session) {
             conversation: conversationId,
             instructions: INSIGHTEAR_INSTRUCTIONS,
             input: message + '\n\nSESSION_ID: ' + sessionId,
+            max_output_tokens: 3000,
             tools: INSIGHTEAR_TOOLS
         });
 
@@ -1635,6 +1636,7 @@ async function processWithAssistant(message, sessionId, session) {
                 conversation: conversationId,
                 instructions: INSIGHTEAR_INSTRUCTIONS,
                 input: toolOutputs,
+                max_output_tokens: 3000,
                 tools: INSIGHTEAR_TOOLS
             });
         }
