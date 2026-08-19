@@ -1116,10 +1116,32 @@ function getSession(sessionId) {
             hasRealData: false
         });
     }
-    
+
     const session = sessions.get(sessionId);
     session.lastActivity = Date.now();
     return session;
+}
+
+async function getOrCreateConversation(sessionId, session) {
+    if (session.conversationId) {
+        return session.conversationId;
+    }
+
+    const conversation = await openai.conversations.create({
+        metadata: {
+            session_id: sessionId
+        }
+    });
+
+    session.conversationId = conversation.id;
+    sessions.set(sessionId, session);
+
+    console.log(
+        '✅ OpenAI Conversation created:',
+        conversation.id
+    );
+
+    return conversation.id;
 }
 
 // ENHANCED QUERY EXTRACTION
