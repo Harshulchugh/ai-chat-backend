@@ -1064,18 +1064,24 @@ function generateCombinedInsights(redditData, newsData, company) {
 // UTILITY FUNCTIONS
 function extractCompanyName(query) {
     const companies = [
-        'Tesla', 'Apple', 'Google', 'Microsoft', 'Amazon', 'Meta', 'Netflix', 
-        'Starbucks', 'McDonald\'s', 'Coca-Cola', 'Nike', 'Adidas', 'Walmart', 
+        'Tesla', 'Apple', 'Google', 'Microsoft', 'Amazon', 'Meta', 'Netflix',
+        'Starbucks', 'McDonald\'s', 'Coca-Cola', 'Nike', 'Adidas', 'Walmart',
         'Target', 'Mondelez', 'Spotify', 'Uber', 'Airbnb', 'Disney', 'Ford',
         'GM', 'Toyota', 'Honda', 'BMW', 'Mercedes', 'Audi', 'Volkswagen',
         'Intel', 'AMD', 'Nvidia', 'Samsung', 'Sony', 'LG', 'Huawei'
     ];
-    
+
     for (const company of companies) {
-        if (query.toLowerCase().includes(company.toLowerCase())) {
+        const escapedCompany = company.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const companyRegex = new RegExp(`\\b${escapedCompany}\\b`, 'i');
+
+        if (companyRegex.test(query)) {
             return company;
         }
     }
+
+    return query.trim();
+}
     
     // Try to extract capitalized words
     const words = query.split(' ');
