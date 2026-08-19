@@ -465,36 +465,52 @@ async function handleWebSearch(query) {
             searchNewsData(query)
         ]);
         
-        const combinedResults = {
-            search_successful: true,
-            query_processed: query,
-            timestamp: new Date().toISOString(),
-            data_sources: {
-                reddit: {
-    success: redditResults.search_successful,
-    posts_found: redditResults.total_posts || 0,
-    posts: redditResults.processed_posts || [],
-    top_subreddits: redditResults.top_subreddits
-},
-                },
-               news: {
-    success: newsResults.search_successful,
-    articles_found: newsResults.total_articles || 0,
-    articles: newsResults.processed_articles || [],
-    sources: newsResults.sources
-                }
-            },
-            combined_metrics: {
-                total_mentions: (redditResults.total_posts || 0) + (newsResults.total_articles || 0),
-                platforms: ['Reddit', 'News Sources'],
-                data_authenticity: 'verified_apis',
-                api_status: {
-                    reddit: redditResults.search_successful ? 'connected' : 'failed',
-                    news: newsResults.search_successful ? 'connected' : 'failed'
-                }
-            }
-        };
-        
+       const combinedResults = {
+    search_successful: true,
+    query_processed: query,
+    timestamp: new Date().toISOString(),
+
+    data_sources: {
+        reddit: {
+            success: redditResults.search_successful,
+            posts_found: redditResults.total_posts || 0,
+            posts: redditResults.processed_posts || [],
+            top_subreddits: redditResults.top_subreddits || []
+        },
+
+        news: {
+            success: newsResults.search_successful,
+            articles_found: newsResults.total_articles || 0,
+            articles: newsResults.processed_articles || [],
+            sources: newsResults.sources || []
+        }
+    },
+
+    combined_metrics: {
+        total_mentions:
+            (redditResults.total_posts || 0) +
+            (newsResults.total_articles || 0),
+
+        platforms: [
+            'Reddit',
+            'News Sources'
+        ],
+
+        data_authenticity: 'verified_apis',
+
+        api_status: {
+            reddit:
+                redditResults.search_successful
+                    ? 'connected'
+                    : 'failed',
+
+            news:
+                newsResults.search_successful
+                    ? 'connected'
+                    : 'failed'
+        }
+    }
+};
         console.log('✅ Enhanced web search completed');
         return JSON.stringify(combinedResults, null, 2);
         
