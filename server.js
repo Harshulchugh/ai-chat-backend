@@ -1082,6 +1082,8 @@ function extractCompanyName(query) {
 
     return query.trim();
 }
+
+function getDateDaysAgo(days) {
     
     // Try to extract capitalized words
     const words = query.split(' ');
