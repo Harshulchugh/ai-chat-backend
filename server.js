@@ -1391,205 +1391,237 @@ function generateTemplateReport(sessionData) {
     return professionalReport;
 }
 
-// ENHANCED ASSISTANT PROCESSING
+// RESPONSES API PROCESSING
 async function processWithAssistant(message, sessionId, session) {
     try {
-        console.log('=== ASSISTANT PROCESSING WITH ENHANCED REAL DATA + DRILLDOWN ===');
+        console.log('=== RESPONSES API PROCESSING ===');
         console.log('Processing message for session:', sessionId);
-        
-        // Check if this is a drilldown query
+
+        // Keep existing drilldown behavior for now
         const drilldownKeywords = [
-            'show me', 'what are', 'breakdown', 'themes', 'posts', 'articles', 
-            'headlines', 'subreddit', 'negative', 'positive', 'sentiment', 'sources'
+            'show me',
+            'what are',
+            'breakdown',
+            'themes',
+            'posts',
+            'articles',
+            'headlines',
+            'subreddit',
+            'negative',
+            'positive',
+            'sentiment',
+            'sources'
         ];
-        
-        const isDrilldown = drilldownKeywords.some(keyword => 
+
+        const isDrilldown = drilldownKeywords.some(keyword =>
             message.toLowerCase().includes(keyword)
         );
-        
+
         if (isDrilldown && session.lastAnalysisId) {
             console.log('🔍 Detected drilldown query, processing...');
-            const drilldownResponse = await handleDrilldownQuery(message, sessionId);
-            
-            // Update session
+
+            const drilldownResponse = await handleDrilldownQuery(
+                message,
+                sessionId
+            );
+
             session.lastResponse = drilldownResponse;
             session.timestamp = new Date().toISOString();
+
             sessions.set(sessionId, session);
-            
+
             return drilldownResponse;
         }
-        
-        const thread = await openai.beta.threads.create();
-        console.log('OpenAI thread created: ' + thread.id);
-        
-        await openai.beta.threads.messages.create(thread.id, {
-            role: 'user',
-            content: message + '\n\nSESSION_ID: ' + sessionId + '\n\nNOTE: Use real Reddit API and NewsAPI data for market analysis. Ensure drilldown capabilities are available with direct article URLs.'
+
+        // Get or create the OpenAI Conversation for this InsightEar session
+        const conversationId = await getOrCreateConversation(
+            sessionId,
+            session
+        );
+
+        console.log(
+            'Using OpenAI Conversation:',
+            conversationId
+        );
+
+        let usedRealData = false;
+
+        // First Responses API request
+        let response = await openai.responses.create({
+            model: process.env.OPENAI_MODEL || 'gpt-4.1',
+            conversation: conversationId,
+            instructions: INSIGHTEAR_INSTRUCTIONS,
+            input: message + '\n\nSESSION_ID: ' + sessionId,
+            tools: INSIGHTEAR_TOOLS
         });
 
-        const run = await openai.beta.threads.runs.create(thread.id, {
-            assistant_id: process.env.ASSISTANT_ID,
-            tools: [
-                {
-                    type: 'function',
-                    function: {
-                        name: 'search_real_web_data',
-                        description: 'Search for current web data using REAL Reddit API and NewsAPI with enhanced drilldown capabilities',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                query: { 
-                                    type: 'string', 
-                                    description: 'Search query for real web data collection' 
-                                }
-                            },
-                            required: ['query']
-                        }
-                    }
-                },
-                {
-                    type: 'function',
-                    function: {
-                        name: 'analyze_real_market_data',
-                        description: 'Perform market analysis using REAL Reddit and News API data with enhanced drilldown support',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                query: { 
-                                    type: 'string', 
-                                    description: 'Brand or topic for real market analysis with enhanced drilldown' 
-                                }
-                            },
-                            required: ['query']
-                        }
-                    }
-                },
-                {
-                    type: 'function',
-                    function: {
-                        name: 'get_company_background',
-                        description: 'Get company background with real data context',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                query: { 
-                                    type: 'string', 
-                                    description: 'Company name for background research' 
-                                }
-                            },
-                            required: ['query']
-                        }
-                    }
-                }
-            ]
-        });
+        let toolRounds = 0;
+        const MAX_TOOL_ROUNDS = 8;
 
-        // Enhanced polling with real data processing
-        let attempts = 0;
-        const maxAttempts = 50;
-        
-        while (attempts < maxAttempts) {
-            attempts++;
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            const runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-            
-            if (runStatus.status === 'completed') {
-                console.log('Assistant run completed with enhanced real data after', attempts, 'attempts');
-                const messages = await openai.beta.threads.messages.list(thread.id);
-                const assistantMessage = messages.data[0];
-                
-                if (assistantMessage && assistantMessage.content[0]) {
-                    const assistantResponse = assistantMessage.content[0].text.value;
-                    
-                    // Enhanced session storage with real data flag and analysis ID
-                    const cleanQuery = extractCleanQuery(message);
-                    
-                    session.lastQuery = cleanQuery;
-                    session.lastResponse = assistantResponse;
-                    session.timestamp = new Date().toISOString();
+        // Continue until the model has finished using tools
+        while (toolRounds < MAX_TOOL_ROUNDS) {
+
+            const functionCalls = response.output.filter(
+                item => item.type === 'function_call'
+            );
+
+            // No more function calls = final answer
+            if (functionCalls.length === 0) {
+
+                const assistantResponse =
+                    response.output_text ||
+                    'No response was generated. Please try again.';
+
+                const cleanQuery = extractCleanQuery(message);
+
+                session.lastQuery = cleanQuery;
+                session.lastResponse = assistantResponse;
+                session.timestamp = new Date().toISOString();
+
+                if (usedRealData) {
                     session.hasRealData = true;
-                    
-                    sessions.set(sessionId, session);
-                    
-                    console.log('✅ Enhanced real data analysis completed with drilldown for:', cleanQuery);
-                    return assistantResponse;
                 }
+
+                sessions.set(sessionId, session);
+
+                console.log(
+                    '✅ Responses API analysis completed for:',
+                    cleanQuery
+                );
+
+                return assistantResponse;
             }
 
-            if (runStatus.status === 'requires_action') {
-                console.log('=== PROCESSING ENHANCED REAL DATA FUNCTION CALLS ===');
-                const toolCalls = runStatus.required_action?.submit_tool_outputs?.tool_calls;
-                
-                if (toolCalls) {
-                    const toolOutputs = [];
-                    
-                    for (const toolCall of toolCalls) {
-                        console.log('Processing enhanced real data function:', toolCall.function.name);
-                        
+            toolRounds++;
+
+            console.log(
+                `🔧 Processing ${functionCalls.length} tool call(s), round ${toolRounds}`
+            );
+
+            const toolOutputs = [];
+
+            for (const call of functionCalls) {
+
+                try {
+                    const args = JSON.parse(call.arguments);
+
+                    let output;
+
+                    console.log(
+                        'Processing function:',
+                        call.name,
+                        'Query:',
+                        args.query
+                    );
+
+                    if (call.name === 'search_real_web_data') {
+
+                        output = await handleWebSearch(args.query);
+                        usedRealData = true;
+
+                        console.log(
+                            '✅ Real web search completed for:',
+                            args.query
+                        );
+
+                    } else if (
+                        call.name === 'analyze_real_market_data'
+                    ) {
+
+                        output =
+                            await handleRealMarketAnalysis(args.query);
+
+                        usedRealData = true;
+
+                        // Save analysis ID for drilldowns
                         try {
-                            const args = JSON.parse(toolCall.function.arguments);
-                            let output;
-                            
-                            if (toolCall.function.name === 'search_real_web_data') {
-                                output = await handleWebSearch(args.query);
-                                console.log('✅ Enhanced real web search completed for:', args.query);
-                            } else if (toolCall.function.name === 'analyze_real_market_data') {
-                                output = await handleRealMarketAnalysis(args.query);
-                                
-                                // Enhanced analysis ID extraction and storage
-                                try {
-                                    const analysisData = JSON.parse(output);
-                                    if (analysisData.analysis_id) {
-                                        session.lastAnalysisId = analysisData.analysis_id;
-                                        console.log('✅ Stored enhanced analysis ID in session:', analysisData.analysis_id);
-                                    }
-                                } catch (parseError) {
-                                    console.error('❌ Failed to parse enhanced analysis data for ID extraction:', parseError.message);
-                                }
-                                
-                                console.log('✅ Enhanced real market analysis with drilldown completed for:', args.query);
-                            } else if (toolCall.function.name === 'get_company_background') {
-                                const background = getCompanyBackground(args.query);
-                                output = JSON.stringify(background);
-                                console.log('✅ Enhanced real background search completed for:', args.query);
+                            const analysisData =
+                                JSON.parse(output);
+
+                            if (analysisData.analysis_id) {
+                                session.lastAnalysisId =
+                                    analysisData.analysis_id;
+
+                                console.log(
+                                    '✅ Stored analysis ID:',
+                                    analysisData.analysis_id
+                                );
                             }
-                            
-                            toolOutputs.push({
-                                tool_call_id: toolCall.id,
-                                output: output
-                            });
-                            
-                        } catch (funcError) {
-                            console.error('Enhanced real data function error:', funcError);
-                            toolOutputs.push({
-                                tool_call_id: toolCall.id,
-                                output: JSON.stringify({ 
-                                    error: 'Enhanced real data function failed: ' + funcError.message,
-                                    fallback: 'Using enhanced simulation with error recovery'
-                                })
-                            });
+
+                        } catch (parseError) {
+                            console.error(
+                                'Could not extract analysis ID:',
+                                parseError.message
+                            );
                         }
+
+                    } else if (
+                        call.name === 'get_company_background'
+                    ) {
+
+                        output = JSON.stringify(
+                            getCompanyBackground(args.query)
+                        );
+
+                    } else {
+
+                        output = JSON.stringify({
+                            error:
+                                'Unknown tool requested: ' +
+                                call.name
+                        });
                     }
-                    
-                    await openai.beta.threads.runs.submitToolOutputs(thread.id, run.id, {
-                        tool_outputs: toolOutputs
+
+                    toolOutputs.push({
+                        type: 'function_call_output',
+                        call_id: call.call_id,
+                        output:
+                            typeof output === 'string'
+                                ? output
+                                : JSON.stringify(output)
+                    });
+
+                } catch (toolError) {
+
+                    console.error(
+                        'Tool execution error:',
+                        toolError
+                    );
+
+                    toolOutputs.push({
+                        type: 'function_call_output',
+                        call_id: call.call_id,
+                        output: JSON.stringify({
+                            success: false,
+                            error: toolError.message
+                        })
                     });
                 }
-                continue;
             }
-            
-            if (runStatus.status === 'failed' || runStatus.status === 'cancelled') {
-                console.log('Run failed with status:', runStatus.status);
-                return 'Assistant processing failed: ' + runStatus.status + '. Please try again.';
-            }
+
+            // Send real Reddit/News results back to OpenAI
+            response = await openai.responses.create({
+                model: process.env.OPENAI_MODEL || 'gpt-4.1',
+                conversation: conversationId,
+                instructions: INSIGHTEAR_INSTRUCTIONS,
+                input: toolOutputs,
+                tools: INSIGHTEAR_TOOLS
+            });
         }
 
-        return "Enhanced real data analysis timeout - please try again with a simpler query.";
+        return 'InsightEar reached the maximum number of research steps. Please try your question again.';
 
     } catch (error) {
-        console.error('Enhanced real data assistant processing error:', error);
-        return 'Technical difficulties with enhanced real data processing. Error: ' + error.message;
+
+        console.error(
+            'Responses API processing error:',
+            error
+        );
+
+        return (
+            'Technical difficulties processing your request. Error: ' +
+            error.message
+        );
     }
 }
 
