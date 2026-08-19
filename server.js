@@ -471,18 +471,17 @@ async function handleWebSearch(query) {
             timestamp: new Date().toISOString(),
             data_sources: {
                 reddit: {
-                    success: redditResults.search_successful,
-                    posts_found: redditResults.total_posts || 0,
-                    sentiment: redditResults.sentiment_breakdown,
-                    themes: redditResults.themes,
-                    top_subreddits: redditResults.top_subreddits
+    success: redditResults.search_successful,
+    posts_found: redditResults.total_posts || 0,
+    posts: redditResults.processed_posts || [],
+    top_subreddits: redditResults.top_subreddits
+},
                 },
-                news: {
-                    success: newsResults.search_successful,
-                    articles_found: newsResults.total_articles || 0,
-                    sentiment: newsResults.sentiment_breakdown,
-                    sources: newsResults.sources,
-                    themes: newsResults.themes
+               news: {
+    success: newsResults.search_successful,
+    articles_found: newsResults.total_articles || 0,
+    articles: newsResults.processed_articles || [],
+    sources: newsResults.sources
                 }
             },
             combined_metrics: {
