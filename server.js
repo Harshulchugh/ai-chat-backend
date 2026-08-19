@@ -1081,6 +1081,7 @@ function getDateDaysAgo(days) {
 function getSession(sessionId) {
     if (!sessions.has(sessionId)) {
         sessions.set(sessionId, {
+            conversationId: null,
             lastQuery: null,
             lastResponse: null,
             lastAnalysisId: null,
