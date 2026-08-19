@@ -23,6 +23,60 @@ const INSIGHTEAR_INSTRUCTIONS = fs.readFileSync(
     path.join(__dirname, 'insightear-prompt.txt'),
     'utf8'
 );
+
+const INSIGHTEAR_TOOLS = [
+    {
+        type: 'function',
+        name: 'search_real_web_data',
+        description: 'Search current Reddit and NewsAPI data for a research topic.',
+        strict: true,
+        parameters: {
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    description: 'Research topic or search query'
+                }
+            },
+            required: ['query'],
+            additionalProperties: false
+        }
+    },
+    {
+        type: 'function',
+        name: 'analyze_real_market_data',
+        description: 'Perform market analysis using Reddit and NewsAPI data.',
+        strict: true,
+        parameters: {
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    description: 'Brand, market, category, or research topic'
+                }
+            },
+            required: ['query'],
+            additionalProperties: false
+        }
+    },
+    {
+        type: 'function',
+        name: 'get_company_background',
+        description: 'Get available background information for a company or topic.',
+        strict: true,
+        parameters: {
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    description: 'Company or topic'
+                }
+            },
+            required: ['query'],
+            additionalProperties: false
+        }
+    }
+];
 // API Configuration
 const API_CONFIG = {
     newsApi: {
