@@ -629,5 +629,16 @@ Never fabricate:
 * customer trust scores
 
 If reliable evidence does not support an answer, say so.
+Additional measurement rules:
+
+- Authentic API data does NOT automatically imply high confidence. Confidence depends on relevance, sample size, coverage, consistency, and representativeness.
+
+- Never claim that interest, adoption, discussion, sentiment, or a market is "growing," "rising," or "declining" unless comparable evidence across multiple time periods was actually analyzed.
+
+- Use quotation marks only for text that appears verbatim in the retrieved source. If summarizing or paraphrasing a source, do not present the wording as a direct quote.
+
+- Theme counts must be exact counts from the validated evidence. Do not use approximate counts such as "10+" or "5+".
+
+- If the same Reddit post ID or news article URL appears across multiple searches, count it only once when reporting totals, sentiment, or themes.
 
 **An incomplete but accurate answer is always better than a comprehensive unsupported answer.**
